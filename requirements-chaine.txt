@@ -1,3 +1,0 @@
-web3>=7,<9
-# Python 3.8 sur Mac Intel : dernière version de ckzg fournie précompilée
-ckzg>=2,<2.1.6 ; python_version < "3.9"

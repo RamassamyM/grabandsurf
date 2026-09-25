@@ -98,11 +98,9 @@ Détail complet dans `docs/ARCHITECTURE.md`. L'essentiel :
 
 ## État actuel du dépôt
 
-- **Migration en cours** vers l'architecture de `docs/ARCHITECTURE.md` (branche `chore/architecture`).
-- **Si `backend/app/` n'existe pas encore** : le créer en suivant `docs/ARCHITECTURE.md` (domaine, services factices, routeurs, `config.json`, `seed.py`), avec les tests unitaires et l'e2e du scénario de démo. Point de départ : le code historique à la racine (`cloud_app.py`, `korko_chain.py`, `chaine_*.py`, `chaine/`), qui fonctionne et sert de référence.
-- **Ensuite** : station robuste (`station/station.py`), frontend React + Tailwind (`frontend/`), `scripts/dev.sh`, CI GitHub Actions, README.
+- **Migration terminée** (branche `chore/architecture`) : backend FastAPI dans `backend/app/`, station robuste dans `station/station.py`, frontend React + Tailwind dans `frontend/`, `scripts/dev.sh`, CI GitHub Actions. Le code historique de la racine (`cloud_app.py`, `korko_chain.py`, `chaine_*.py`, `chaine/`) a été supprimé ; `BLOCKCHAIN.md` est dans `docs/`.
+- Ce qui reste et les décisions prises pendant la migration : `docs/NIGHT_LOG.md`.
 - Maquettes des écrans : `docs/VISILY_PROMPTS.md`.
-- Le code historique à la racine reste en place tant que la démo complète ne tourne pas sur la nouvelle architecture ; ensuite on le supprime (`git rm`), et `BLOCKCHAIN.md` va dans `docs/`.
 
 Lancer le backend : `uvicorn backend.app.main:create_app --factory --port 9000`
 Tests : `python -m unittest discover -s backend/tests -t .`

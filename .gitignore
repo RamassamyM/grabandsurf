@@ -1,6 +1,4 @@
 .env
-chaine_file*.ndjson
-chaine_file*.ndjson.tmp
 __pycache__/
 .venv/
 data/
