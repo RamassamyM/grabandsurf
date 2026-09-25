@@ -11,6 +11,11 @@ const KEY = 'gs_lang'
 
 const T = {
   fr: {
+    step_phone: 'Numéro', step_card: 'Carte', step_surf: 'Surf',
+    tagline: 'Ta planche en 2 gestes.',
+    tagline_sub: 'Sans personne sur la plage.',
+    referral_end_title: 'Fais surfer un ami',
+    lang_label: 'Langue',
     change_number: 'Changer de numéro',
     rack: 'Rack {id}',
     available: '{n} planche(s) disponible(s)',
@@ -161,6 +166,11 @@ const T = {
     demo_sender: 'Grab&Surf', demo_title: 'Démo : le parcours du surfeur sur son téléphone',
   },
   en: {
+    step_phone: 'Number', step_card: 'Card', step_surf: 'Surf',
+    tagline: 'Your board in 2 moves.',
+    tagline_sub: 'No staff on the beach.',
+    referral_end_title: 'Get a friend surfing',
+    lang_label: 'Language',
     change_number: 'Change number',
     rack: 'Rack {id}',
     available: '{n} board(s) available',
@@ -310,6 +320,11 @@ const T = {
     demo_sender: 'Grab&Surf', demo_title: "Demo: the surfer's journey on their phone",
   },
   es: {
+    step_phone: 'Número', step_card: 'Tarjeta', step_surf: 'Surf',
+    tagline: 'Tu tabla en 2 gestos.',
+    tagline_sub: 'Sin nadie en la playa.',
+    referral_end_title: 'Haz surfear a un amigo',
+    lang_label: 'Idioma',
     change_number: 'Cambiar de número',
     rack: 'Rack {id}',
     available: '{n} tabla(s) disponible(s)',
@@ -499,14 +514,50 @@ export function useT() {
   return useContext(LangContext)
 }
 
-export function LangSwitch({ className = '' }) {
-  const { lang, setLang } = useT()
+const FLAGS = {
+  fr: (
+    <>
+      <rect width="30" height="20" fill="#fff" />
+      <rect width="10" height="20" fill="#002654" />
+      <rect x="20" width="10" height="20" fill="#CE1126" />
+    </>
+  ),
+  en: (
+    <>
+      <rect width="30" height="20" fill="#012169" />
+      <path d="M0,0 30,20 M30,0 0,20" stroke="#fff" strokeWidth="4" />
+      <path d="M0,0 30,20 M30,0 0,20" stroke="#C8102E" strokeWidth="1.6" />
+      <path d="M15,0 V20 M0,10 H30" stroke="#fff" strokeWidth="6" />
+      <path d="M15,0 V20 M0,10 H30" stroke="#C8102E" strokeWidth="3.4" />
+    </>
+  ),
+  es: (
+    <>
+      <rect width="30" height="20" fill="#AA151B" />
+      <rect y="5" width="30" height="10" fill="#F1BF00" />
+    </>
+  ),
+}
+
+export function Flag({ code, className = '' }) {
   return (
-    <div className={`inline-flex rounded-full bg-white/90 p-0.5 shadow-card ${className}`} role="group" aria-label="Langue / Language / Idioma">
+    <svg viewBox="0 0 30 20" className={`h-4 w-6 shrink-0 overflow-hidden rounded-[3px] shadow-[0_0_0_1px_rgba(11,37,51,.15)] ${className}`} aria-hidden>
+      {FLAGS[code]}
+    </svg>
+  )
+}
+
+// Language picker with flags, for the customer pages.
+export function LangSwitch({ className = '', dark = false }) {
+  const { lang, setLang, t } = useT()
+  return (
+    <div role="group" aria-label={t('lang_label')}
+      className={`inline-flex items-center gap-0.5 rounded-full p-1 ${dark ? 'bg-white/10' : 'border bg-white shadow-sm'} ${className}`}>
       {LANGS.map((l) => (
-        <button key={l.code} onClick={() => setLang(l.code)} title={l.name} aria-pressed={lang === l.code}
-          className={`rounded-full px-2.5 py-1 text-xs font-bold ${lang === l.code ? 'bg-ocean-500 text-white' : 'text-ocean-700'}`}>
-          {l.label}
+        <button key={l.code} onClick={() => setLang(l.code)} title={l.name} aria-label={l.name} aria-pressed={lang === l.code}
+          className={`flex h-8 w-9 items-center justify-center rounded-full transition ${lang === l.code
+            ? (dark ? 'bg-white/90' : 'bg-foam ring-1 ring-ocean/40') : 'opacity-50 grayscale-[40%] hover:opacity-100'}`}>
+          <Flag code={l.code} />
         </button>
       ))}
     </div>

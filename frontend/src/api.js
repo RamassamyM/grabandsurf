@@ -21,6 +21,8 @@ export const session = {
   token: () => safeGet(TOKEN_KEY),
   phone: () => safeGet(PHONE_KEY),
   save: (token, phone) => { safeSet(TOKEN_KEY, token); safeSet(PHONE_KEY, phone) },
+  // Known as soon as the code is sent, so the demo texts show on the code step.
+  setPhone: (phone) => safeSet(PHONE_KEY, phone),
   clear: () => { safeSet(TOKEN_KEY, null); safeSet(PHONE_KEY, null) },
   pendingPack: () => safeGet(PACK_KEY) || '',
   setPendingPack: (code) => safeSet(PACK_KEY, code || null),

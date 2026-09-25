@@ -1,22 +1,65 @@
+@font-face {
+  font-family: 'Outfit';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Outfit_400Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/Outfit_700Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-weight: 800 900;
+  font-display: swap;
+  src: url('/fonts/Outfit_800ExtraBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Kaushan Script';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/KaushanScript_400Regular.ttf') format('truetype');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --background: 192 60% 97%;
+    --foreground: 201 65% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 201 65% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 201 65% 12%;
+    --primary: 201 65% 12%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 191 72% 94%;
+    --secondary-foreground: 201 65% 12%;
+    --muted: 192 45% 95%;
+    --muted-foreground: 199 22% 38%;
+    --accent: 193 64% 90%;
+    --accent-foreground: 201 65% 12%;
+    --destructive: 358 75% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 193 40% 89%;
+    --input: 193 40% 85%;
+    --ring: 191 76% 45%;
+    --radius: 1rem;
+  }
+  * { @apply border-border; }
   html { -webkit-tap-highlight-color: transparent; }
-  body { min-height: 100dvh; }
+  body { @apply min-h-dvh bg-background font-sans text-foreground antialiased; }
 }
 
 @layer components {
-  .input {
-    @apply w-full rounded-xl border border-sand-300 bg-white px-4 py-3 text-base text-ocean-900
-      placeholder:text-ocean-900/40 focus:border-ocean-500 focus:outline-none focus:ring-2 focus:ring-ocean-300;
-  }
-  .label { @apply mb-1 block text-sm font-medium text-ocean-700; }
   .cork-texture {
-    background-color: #C08F4F;
-    background-image: radial-gradient(rgba(107,72,32,.35) 1px, transparent 1.5px),
-      radial-gradient(rgba(255,236,200,.25) 1px, transparent 1.5px);
+    background-color: #d39a55;
+    background-image: radial-gradient(rgba(107, 72, 32, 0.35) 1px, transparent 1.5px),
+      radial-gradient(rgba(255, 236, 200, 0.3) 1px, transparent 1.5px);
     background-size: 9px 9px, 13px 13px;
     background-position: 0 0, 4px 6px;
   }
