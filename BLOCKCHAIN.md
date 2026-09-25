@@ -1,5 +1,7 @@
 # KORKO sur Avalanche : le carnet de vie des planches
 
+Nos fichiers sont à la racine ; `korko-kit/` reste le kit des organisateurs, non modifié.
+
 Chaque planche est un NFT (ERC-721) sur Avalanche. Chaque départ, retour,
 retour dans une autre station ou perte validé par `cloud_app.py` est inscrit
 dans son carnet de vie. L'usager ne signe rien, ne paie rien et ne voit pas la
@@ -25,9 +27,9 @@ python3 chaine_deployer.py                # déploie le contrat + 6 NFT, écrit 
 Un terminal par commande :
 
 ```
-python3 korko_sim.py                              # http://localhost:8080
-python3 cloud_app.py                              # http://localhost:9000
-python3 station_exemple.py --source localhost:8420
+python3 korko-kit/korko_sim.py                              # http://localhost:8080
+python3 cloud_app.py                                        # http://localhost:9000
+python3 korko-kit/station_exemple.py --source localhost:8420
 ```
 
 Arme un client (`/arme?client=+33612&station=A`), fais partir la planche dans
@@ -36,7 +38,7 @@ Snowtrace. `/passeport?planche=korko-01` lit l'état directement sur la chaîne.
 
 ## Si le réseau ou la chaîne tombent
 
-La location continue. Les événements attendent dans `chaine_file.ndjson` et
+La location continue. Les événements attendent dans `chaine_file_<contrat>.ndjson` et
 partent plus tard, dans l'ordre, par lots de 20 au plus. Un événement refusé par
 le contrat (planche inconnue) est écarté et noté au journal.
 
@@ -46,4 +48,8 @@ le contrat (planche inconnue) est écarté et noté au journal.
 - `chaine/KorkoPlanche.json` : ABI et bytecode compilés, rien à compiler chez toi.
 - `chaine/standard-input.json` : pour vérifier le code source sur Snowtrace.
 - `korko_chain.py` : la file d'attente et l'écriture on-chain.
+- `chaine/deploiement.json` : adresse publique du contrat de l'équipe (versionnée, sans secret).
 - `chaine_cle.py`, `chaine_deployer.py` : mise en route.
+- `chaine_operateur.py` : le propriétaire autorise ou retire le wallet d'un développeur.
+
+Installation, contrat perso de dev et contrat d'équipe : voir [README.md](README.md).

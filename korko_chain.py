@@ -11,7 +11,7 @@ continue, et les événements partent plus tard, dans l'ordre.
 Ce qui part sur la chaîne : planche, type d'événement, station, heure du flux.
 Ce qui n'y part JAMAIS : le client, son téléphone, sa carte.
 
-Configuration : fichier .env à côté de ce fichier (voir .env.exemple).
+Configuration : fichier .env à côté de ce fichier (voir env.exemple).
 La clé privée reste dans .env, sur ta machine. Elle n'est jamais affichée.
 
 Dépendance (côté cloud seulement) :  pip3 install -r requirements-chaine.txt
@@ -39,19 +39,57 @@ LOT_MAX = 20          # événements par transaction lors d'un rattrapage
 
 # ------------------------------------------------------------------ outils
 
-def lire_env(chemin=os.path.join(ICI, ".env")):
-    """Lit un fichier KEY=VALUE. Les variables d'environnement gagnent."""
-    conf = dict(FUJI)
+FICHIER_DEPLOIEMENT = os.path.join(ICI, "chaine", "deploiement.json")
+
+
+def lire_deploiement():
+    """Adresse du contrat partagé par l'équipe (public, versionné dans git)."""
+    try:
+        with open(FICHIER_DEPLOIEMENT, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def lire_fichier_env(chemin=os.path.join(ICI, ".env")):
+    """Le contenu brut de .env, sans défauts."""
+    conf = {}
     if os.path.exists(chemin):
         with open(chemin, encoding="utf-8") as f:
             for ligne in f:
-                ligne = ligne.strip()
+                ligne = ligne.split(" #", 1)[0].strip()
                 if ligne and not ligne.startswith("#") and "=" in ligne:
                     k, v = ligne.split("=", 1)
-                    conf[k.strip()] = v.strip().strip('"').strip("'")
+                    v = v.strip().strip('"').strip("'")
+                    if v:                               # une ligne vide ne masque rien
+                        conf[k.strip()] = v
+    return conf
+
+
+def lire_env(chemin=os.path.join(ICI, ".env")):
+    """Défauts Fuji, puis chaine/deploiement.json, puis .env, puis l'environnement.
+
+    Deux contrats possibles :
+      - le contrat d'ÉQUIPE (démo, code vérifié) : chaine/deploiement.json ;
+      - ton contrat PERSO de dev : KORKO_CONTRAT dans ton .env (il gagne).
+    KORKO_MODE=equipe force le contrat d'équipe, même si ton .env en a un perso :
+        KORKO_MODE=equipe python3 cloud_app.py
+    """
+    conf = dict(FUJI)
+    d = lire_deploiement()
+    if d.get("contrat"):
+        conf["KORKO_CONTRAT"] = d["contrat"]
+        conf["KORKO_BLOC_DEPLOIEMENT"] = str(d.get("bloc", ""))
+    conf.update(lire_fichier_env(chemin))
     for k in list(conf) + ["KORKO_CLE_OPERATEUR", "KORKO_CONTRAT"]:
         if os.environ.get(k):
             conf[k] = os.environ[k]
+    if os.environ.get("KORKO_MODE", "").lower() in ("equipe", "équipe") and d.get("contrat"):
+        conf["KORKO_CONTRAT"] = d["contrat"]
+        conf["KORKO_BLOC_DEPLOIEMENT"] = str(d.get("bloc", ""))
+    equipe = (d.get("contrat") or "").lower()
+    conf["KORKO_MODE"] = "équipe" if equipe and conf.get("KORKO_CONTRAT", "").lower() == equipe \
+        else "perso"
     return conf
 
 
@@ -127,11 +165,9 @@ def envoyer_tx(w3, compte, fonction, chain_id, attente=90):
 class Chaine:
     """Publie les événements du parc sur Avalanche, sans jamais bloquer le cloud."""
 
-    def __init__(self, note=None, w3=None, conf=None,
-                 fichier_file=os.path.join(ICI, "chaine_file.ndjson")):
+    def __init__(self, note=None, w3=None, conf=None, fichier_file=None):
         self.note = note or (lambda texte: print(texte, file=sys.stderr))
         self.conf = conf or lire_env()
-        self.fichier_file = fichier_file
         self.explorateur = self.conf.get("KORKO_EXPLORATEUR", FUJI["KORKO_EXPLORATEUR"])
         self.actif = False
         self.raison = ""
@@ -142,6 +178,11 @@ class Chaine:
         self.reveil = threading.Event()
         self.adresse = None
         self.contrat_adresse = self.conf.get("KORKO_CONTRAT")
+        self.mode = self.conf.get("KORKO_MODE", "perso")
+        if fichier_file is None:       # une file par contrat : changer de contrat ne mélange rien
+            fichier_file = os.path.join(
+                ICI, "chaine_file_%s.ndjson" % (self.contrat_adresse or "0x_aucun")[2:10].lower())
+        self.fichier_file = fichier_file
 
         try:
             self.w3, self.compte, self.contrat = connecter(self.conf, w3)
@@ -149,6 +190,10 @@ class Chaine:
                 raise RuntimeError("pas de contrat dans .env : lance python3 chaine_deployer.py")
             self.adresse = self.compte.address
             self.chain_id = int(self.conf.get("KORKO_CHAIN_ID") or self.w3.eth.chain_id)
+            if not self.contrat.functions.operateurs(self.adresse).call():
+                raise RuntimeError(
+                    "ton adresse %s n'est pas opérateur du contrat : demande au propriétaire "
+                    "de lancer  python3 chaine_operateur.py %s" % (self.adresse, self.adresse))
             self.actif = True
         except Exception as e:
             self.raison = str(e)
@@ -157,8 +202,8 @@ class Chaine:
 
         self._relire_file()
         threading.Thread(target=self._boucle, daemon=True).start()
-        self.note("blockchain active : contrat %s, %d événement(s) en attente"
-                  % (self.contrat_adresse, len(self.attente)))
+        self.note("blockchain active : contrat %s %s, %d événement(s) en attente"
+                  % (self.mode.upper(), self.contrat_adresse, len(self.attente)))
 
     # -- appelé par le cloud ------------------------------------------------
     def publier(self, balise, type_, station, t):
@@ -175,7 +220,7 @@ class Chaine:
 
     def etat(self):
         with self.verrou:
-            return {"actif": self.actif, "raison": self.raison,
+            return {"actif": self.actif, "raison": self.raison, "mode": self.mode,
                     "contrat": self.contrat_adresse, "operateur": self.adresse,
                     "en_attente": len(self.attente), "derniers": self.recus[:10],
                     "erreur": self.erreur, "explorateur": self.explorateur}

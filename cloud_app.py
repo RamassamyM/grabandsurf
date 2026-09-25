@@ -190,7 +190,9 @@ def bloc_chaine():
         l.append("en veille : %s" % html.escape(raison))
         return "\n".join(l)
     e = chaine.etat()
-    l.append('contrat   <a href="%s">%s</a>' % (chaine.lien("address", e["contrat"]), e["contrat"]))
+    l.append('contrat   <a href="%s">%s</a>  %s'
+             % (chaine.lien("address", e["contrat"]), e["contrat"],
+                "ÉQUIPE · démo" if e["mode"] == "équipe" else "PERSO · dev"))
     l.append("en attente d'écriture : %d" % e["en_attente"])
     if e["erreur"]:
         l.append("réseau : %s (on réessaie)" % html.escape(e["erreur"]))

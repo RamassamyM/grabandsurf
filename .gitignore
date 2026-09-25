@@ -1,4 +1,4 @@
 .env
-chaine_file.ndjson
-chaine_file.ndjson.tmp
+chaine_file*.ndjson
+chaine_file*.ndjson.tmp
 __pycache__/

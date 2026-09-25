@@ -16,7 +16,7 @@ aucune conversation. Si .env contient déjà une clé, le script ne touche à ri
 import os
 import sys
 
-from korko_chain import FUJI, ICI, ecrire_env, lire_env
+from korko_chain import FUJI, ICI, ecrire_env, lire_deploiement, lire_env
 
 try:
     from eth_account import Account
@@ -46,4 +46,8 @@ print("    https://build.avax.network/console/primary-network/faucet")
 print("    ou https://core.app/tools/testnet-faucet  (coupon Guild si pas de solde mainnet)")
 print("Solde : %s/address/%s" % (FUJI["KORKO_EXPLORATEUR"], adresse))
 print()
-print("Puis :  python3 chaine_deployer.py")
+print("Puis :")
+print("  - ton contrat de dev perso :  python3 chaine_deployer.py")
+if lire_deploiement().get("contrat"):
+    print("  - pour écrire aussi dans le contrat d'ÉQUIPE (démo), envoie ton adresse")
+    print("    au propriétaire, qui lancera :  python3 chaine_operateur.py %s" % adresse)
