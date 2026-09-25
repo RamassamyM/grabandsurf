@@ -47,3 +47,46 @@ class ChainTest(unittest.TestCase):
         chain = ChainService("off", {}, self.tmp)
         chain.publish(1, "korko-01", "DEPART", "A", 1)
         self.assertEqual((chain.mode, chain.status()["recent"]), ("off", []))
+
+
+class RealModeTest(unittest.TestCase):
+    """Real mode with a fake web3: queue on disk, background send, callback."""
+
+    def make_w3(self, fail_first=False):
+        from unittest import mock
+        w3 = mock.MagicMock()
+        w3.eth.account.from_key.return_value.address = "0x" + "a" * 40
+        w3.eth.contract.return_value.functions.operateurs.return_value.call.return_value = True
+        w3.eth.get_transaction_count.return_value = 0
+        calls = {"n": 0}
+
+        def send_raw(_raw):
+            calls["n"] += 1
+            if fail_first and calls["n"] == 1:
+                raise ConnectionError("réseau coupé")
+            return b"h"
+        w3.eth.send_raw_transaction.side_effect = send_raw
+        w3.eth.wait_for_transaction_receipt.return_value = {"status": 1}
+        w3.to_hex.return_value = "0x" + "d" * 64
+        return w3, calls
+
+    def run_publish(self, fail_first):
+        import threading
+        tmp = Path(tempfile.mkdtemp())
+        w3, calls = self.make_w3(fail_first)
+        chain = ChainService("team", {"OPERATOR_KEY": "0x" + "1" * 64}, tmp, w3=w3)
+        self.assertEqual((chain.mode, chain.label), ("real", "ÉQUIPE · démo"))
+        done = threading.Event()
+        got = []
+        chain.on_sent = lambda refs, h: (got.append((refs, h)), done.set())
+        chain.publish(7, "korko-01", "DEPART", "A", 10)
+        self.assertTrue(done.wait(10), "event never sent")
+        self.assertEqual(got[0], ([7], "0x" + "d" * 64))
+        self.assertEqual(chain.queue_file.read_text(), "")
+        return calls
+
+    def test_send_in_background(self):
+        self.assertEqual(self.run_publish(False)["n"], 1)
+
+    def test_network_error_is_retried(self):
+        self.assertEqual(self.run_publish(True)["n"], 2)
