@@ -2,3 +2,9 @@
 chaine_file*.ndjson
 chaine_file*.ndjson.tmp
 __pycache__/
+.venv/
+data/
+*.db
+node_modules/
+frontend/dist/
+.DS_Store
