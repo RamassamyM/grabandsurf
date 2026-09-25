@@ -199,7 +199,7 @@ export function SmsInbox({ phone }) {
             {count === 0 && <p className="py-4 text-center text-sm text-muted-foreground">{t('sms_none')}</p>}
             {list.map((m) => (
               <div key={m.id} className="max-w-[90%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm shadow-sm">
-                {m.text}
+                <LinkedText text={m.text} />
                 <SmsStatus status={m.status} error={m.error} />
               </div>
             ))}
@@ -213,6 +213,15 @@ export function SmsInbox({ phone }) {
       </Button>
     </div>
   )
+}
+
+const LINK = /(https?:\/\/[^\s]+|\/(?:s|p|claim)\/[^\s]+)/g
+
+// SMS text with its links clickable (absolute, or app paths in the demo).
+function LinkedText({ text }) {
+  return String(text).split(LINK).map((part, i) => (i % 2 ? (
+    <a key={i} href={part} className="break-all font-bold text-ocean-700 underline">{part}</a>
+  ) : <span key={i}>{part}</span>))
 }
 
 export function SmsStatus({ status, error }) {

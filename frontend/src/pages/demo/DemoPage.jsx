@@ -171,8 +171,9 @@ function FakeQr({ item, label, busy, onClick }) {
   )
 }
 
-const LINK = /(https?:\/\/[^\s]+)/g
-const IS_LINK = /^https?:\/\//
+// Absolute links, or app paths when PUBLIC_BASE_URL is not set (demo).
+const LINK = /(https?:\/\/[^\s]+|\/(?:s|p|claim)\/[^\s]+)/g
+const IS_LINK = /^(https?:\/\/|\/(?:s|p|claim)\/)/
 
 function Messages({ phone, list, onOpen }) {
   const { t } = useT()
@@ -181,7 +182,7 @@ function Messages({ phone, list, onOpen }) {
   const ordered = [...list].sort((a, b) => a.id - b.id)
   const follow = (href) => {
     try {
-      const u = new URL(href)
+      const u = new URL(href, window.location.origin)
       if (u.origin === window.location.origin || /localhost|127\.0\.0\.1/.test(u.host)) return onOpen(u.pathname + u.search)
     } catch { /* not a URL */ }
     window.open(href, '_blank', 'noreferrer')

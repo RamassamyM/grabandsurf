@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, Clock, Loader2, ShieldCheck, Wrench } from 'lucide-react'
+import { Camera, CheckCircle2, Clock, Loader2, ShieldCheck, Wrench } from 'lucide-react'
 import { api } from '@/api.js'
 import { PageTitle, PinGate, StaffLayout, useRole } from '@/components/Layout.jsx'
 import { ErrorNote, Money, Spinner, usePoll } from '@/components/common.jsx'
@@ -77,11 +77,16 @@ function SessionCard({ session: s, data, role, reload }) {
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Badge variant="muted">payé <Money cents={s.charged_cents} /></Badge>
           <Badge variant="ocean">caution <Money cents={s.deposit_left_cents} /></Badge>
+          {s.photo_missing && <Badge variant="coral" className="gap-1"><Camera className="h-3 w-3" /> photo manquante : pas de libération auto</Badge>}
           {s.auto_release_in && <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> auto dans {s.auto_release_in}</Badge>}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {s.photos.length === 0 && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">Pas de photo de retour : vérifier la planche au rack.</p>}
+        {s.photos.length === 0 && (
+          <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">
+            Pas de photo de retour : la caution reste bloquée. Le client a reçu le lien par SMS ; sinon, vérifier la planche au rack puis valider.
+          </p>
+        )}
         {s.photos.map((p) => <PhotoDiagnosis key={p.id} photo={p} compact />)}
         {openReports.length > 0 && (
           <ul className="space-y-2">

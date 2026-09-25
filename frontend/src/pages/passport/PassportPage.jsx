@@ -62,7 +62,7 @@ export default function PassportPage() {
         </div>
 
         {mine && mine.status !== 'armed' && <ReturnHere rental={mine} board={b.id} reload={me.reload} />}
-        {!mine && lastMine && lastMine.status === 'returned' && !lastMine.photo_credited && (
+        {!mine && lastMine && lastMine.status === 'returned' && !lastMine.photo_taken && (
           <Card><CardContent className="pt-1"><PhotoReturn rental={lastMine} reload={me.reload} /></CardContent></Card>
         )}
 
