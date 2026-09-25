@@ -16,7 +16,7 @@ from .domain import fleet, pricing, wallet
 from .domain.fleet import STATUS_LABELS, format_duration
 from .domain.packs import minutes_left
 from .domain.pricing import format_eur
-from .models import (Alert, Board, CardHold, ChainTx, Customer, PackCode, Rental, Station,
+from .models import (Alert, Board, CardHold, ChainTx, Customer, PackCode, Photo, Rental, Station,
                      StationEvent, WalletEntry)
 from .services import Services
 
@@ -110,6 +110,8 @@ def rental_view(db: Session, rental: Rental, config: dict[str, Any], now_t: floa
             "charged_cents": rental.charged_cents,
             "deposit_released": rental.status == "returned",
         }
+        view["photo_credited"] = db.scalar(select(Photo.id).where(
+            Photo.rental_id == rental.id, Photo.rewarded.is_(True))) is not None
     return view
 
 

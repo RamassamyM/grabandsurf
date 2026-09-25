@@ -36,6 +36,7 @@ class MissionsTest(unittest.TestCase):
     def test_wear_rotation_then_default(self):
         out = missions.missions([board("korko-01", count=4), board("korko-02", count=1)], [], [], 0, self.c)
         self.assertIn("korko-01", out[0])
+        self.assertIn("tournée", out[1])
         self.assertEqual(len(missions.missions([board("korko-01")], [], [], 0, self.c)), 1)
 
     def test_no_em_dash(self):

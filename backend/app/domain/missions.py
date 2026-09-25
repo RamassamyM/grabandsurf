@@ -40,8 +40,8 @@ def missions(boards: list[dict[str, Any]], damage_reports: Iterable[dict[str, An
                       key=lambda b: (-b["rentals_count"], b["id"]))
         if used and used[0]["rentals_count"] > 0:
             b = used[0]
-            out.append("Faire tourner %s à la station %s : la plus utilisée du parc (%d sorties)."
+            out.append("Faire tourner %s à la station %s : la plus utilisée du parc (%d sortie(s))."
                        % (b["id"], b["current_station"], b["rentals_count"]))
-    if not out:
-        out.append("Faire la tournée des racks : rien à signaler, vérifier l'état des planches.")
+    if len(out) < MAX_MISSIONS:
+        out.append("Faire la tournée des racks : vérifier l'état des planches et la propreté des QR.")
     return out[:MAX_MISSIONS]
