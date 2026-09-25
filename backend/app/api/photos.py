@@ -14,14 +14,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import current_customer, get_db, get_services, get_settings, require_operator
-from ..domain import repairs, wallet
+from ..domain import repairs, return_photos, wallet
 from ..domain.pricing import format_eur
 from ..i18n import t
 from ..models import Alert, Board, ChainTx, Customer, DamageReport, Inspection, Photo, Rental, RepairFee
 from ..schemas import DamageReportRequest, PhotoUpload, ReviewRequest
 from ..services import Services
 from ..settings import Settings
-from ..workflows import board_dict, clock, credit, raise_alert, record_chain, withhold_repair
+from ..workflows import board_dict, clock, credit, raise_alert, record_chain, return_shots, station_slots, withhold_repair
 
 router = APIRouter(prefix="/api")
 
@@ -63,15 +63,17 @@ def photo_view(db: Session, photo: Photo, settings: Settings) -> dict[str, Any]:
 @router.post("/photos")
 def upload_photo(body: PhotoUpload, customer: Customer = Depends(current_customer), db: Session = Depends(get_db),
                  services: Services = Depends(get_services), settings: Settings = Depends(get_settings)) -> dict[str, Any]:
-    """Return photo: hash, AI diagnosis, repair suggestion, 1 € once per rental if the right board QR is read."""
+    """One of the 6 return shots. The 1 € and the deposit wait for all of them; each QR must be the expected one."""
     lang = customer.lang
     rental = db.get(Rental, body.rental_id)
-    if rental is None or rental.customer_id != customer.id:
+    if rental is None or rental.customer_id != customer.id or not rental.board_id:
         raise HTTPException(404, t("rental_not_found", lang))
-    qr = (body.board_qr or "").strip().lower() or None
-    if rental.board_id and qr != rental.board_id.lower():
-        # only the photo of the rented board counts: another board or no QR is refused
-        raise HTTPException(400, t("wrong_board_qr" if qr else "photo_qr_required", lang, board=rental.board_id))
+    shot = body.shot or "board_qr"  # clients before the 6 shots only sent the board QR
+    qr = (body.qr or body.board_qr or "").strip() or None
+    error = return_photos.check_shot(shot, qr, rental.board_id, rental.end_station,
+                                     station_slots(settings.config, rental.end_station))
+    if error:
+        raise HTTPException(400, t(error, lang, board=rental.board_id, station=rental.end_station or ""))
     try:
         image = base64.b64decode(body.image_base64.split(",", 1)[-1] or b"", validate=False)
     except (binascii.Error, ValueError) as e:
@@ -84,18 +86,27 @@ def upload_photo(body: PhotoUpload, customer: Customer = Depends(current_custome
         path = str(folder / ("%s.img" % digest))
         with open(path, "wb") as f:
             f.write(image)
-    result = services.photo_ai.analyze(image, qr, body.damage_zone)
+    if shot in return_photos.BOARD_SIDE_SHOTS:
+        result = services.photo_ai.analyze(image, rental.board_id, body.damage_zone)
+    else:  # a QR shot: checked above, nothing for the AI to diagnose
+        result = {"engine": "qr", "qr_visible": True, "board_read": rental.board_id, "qr_read": qr.upper() if shot != "board_qr" else qr.lower(),
+                  "overall_condition": "good", "damages": [], "confidence": 1.0,
+                  "summary": "QR lu sur la photo : %s." % qr}
+    result["shot"] = shot
     now = clock(db)
-    already = db.scalar(select(Photo.id).where(Photo.rental_id == rental.id, Photo.rewarded.is_(True))) is not None
-    cents = wallet.photo_reward_cents(rental.status, already, result["board_read"], rental.board_id, settings.config)
-    photo = Photo(rental_id=rental.id, board_id=rental.board_id or "", sha256=digest, path=path,
-                  ai_result=json.dumps(result, ensure_ascii=False), rewarded=bool(cents), t=now)
+    photo = Photo(rental_id=rental.id, board_id=rental.board_id, sha256=digest, path=path,
+                  ai_result=json.dumps(result, ensure_ascii=False), rewarded=False, t=now)
     db.add(photo)
     db.flush()
+    missing = return_photos.missing_shots(return_shots(db, rental))
+    already = db.scalar(select(Photo.id).where(Photo.rental_id == rental.id, Photo.rewarded.is_(True))) is not None
+    cents = wallet.photo_reward_cents(rental.status, already, None if missing else rental.board_id,
+                                      rental.board_id, settings.config)
+    photo.rewarded = bool(cents)
     credit(db, customer.id, cents, "photo", now, rental.id)
     same_photo = db.scalar(select(ChainTx.id).where(ChainTx.board_id == rental.board_id,
                                                     ChainTx.event_type == "INSPECTION", ChainTx.proof == digest))
-    if image and rental.board_id and result["board_read"] == rental.board_id and not same_photo:
+    if image and shot == "board_qr" and not same_photo:
         # the photo stays private; its fingerprint goes on-chain and is signed by the operator wallet
         signed = services.chain.sign(digest)
         if signed:
@@ -105,7 +116,7 @@ def upload_photo(body: PhotoUpload, customer: Customer = Depends(current_custome
 
     suggestion = suggestion_for(db, result.get("damages", []), settings)
     report_ids = []
-    board = db.get(Board, rental.board_id) if rental.board_id else None
+    board = db.get(Board, rental.board_id)
     if board:
         for action in suggestion["actions"]:
             source = "customer" if body.damage_zone and action["zone"] == body.damage_zone else "photo_ai"
@@ -113,14 +124,15 @@ def upload_photo(body: PhotoUpload, customer: Customer = Depends(current_custome
                                           source, rental.id, photo.id, action["fee_cents"], now).id)
     if cents:
         message = t("photo_credited", lang, amount=format_eur(cents))
+    elif missing:
+        message = t("photo_shot_saved", lang, count=len(missing))
     elif already:
         message = t("photo_already", lang)
-    elif rental.status != "returned":
-        message = t("photo_after_return", lang)
     else:
-        message = t("photo_qr_unreadable", lang, board=rental.board_id)
-    return {"photo_id": photo.id, "sha256": digest, "ai_result": result, "credited_cents": cents,
-            "damage_detected": bool(report_ids), "damage_report_ids": report_ids, "message": message}
+        message = t("photo_after_return", lang)
+    return {"photo_id": photo.id, "shot": shot, "sha256": digest, "ai_result": result, "credited_cents": cents,
+            "missing_shots": missing, "damage_detected": bool(report_ids), "damage_report_ids": report_ids,
+            "message": message}
 
 
 @router.get("/photos", dependencies=[Depends(require_operator)])

@@ -31,6 +31,18 @@ class Demo:
     def __init__(self, client: TestClient):
         self.c = client
 
+    def shot(self, headers, rental_id, shot, qr=None, image=b"fake-jpeg", **extra):
+        body = dict(rental_id=rental_id, shot=shot, qr=qr, image_base64=base64.b64encode(image).decode(), **extra)
+        return self.c.post("/api/photos", json=body, headers=headers)
+
+    def return_photos(self, headers, rental_id, board, station="A", slot="A-1"):
+        """The 6 return shots; returns the last answer."""
+        for shot, qr in (("front", None), ("back", None), ("fins", None), ("board_qr", board),
+                         ("slot_qr", slot), ("station_qr", station)):
+            r = self.shot(headers, rental_id, shot, qr)
+            assert r.status_code == 200, r.text
+        return r.json()
+
     def event(self, t, kind, board=None, station="A"):
         body = {"t": t, "station": station, "evenement": kind}
         if board:
@@ -127,23 +139,31 @@ class DemoScenarioTest(unittest.TestCase):
         # the sponsor is credited after the guest's first finished rental
         self.assertEqual(c.get("/api/me", headers=friend).json()["wallet_cents"], 200)
 
-        # 1:35 return photo with the right QR: +1 €, once
-        img = base64.b64encode(b"fake-jpeg-bytes").decode()
-        wrong = c.post("/api/photos", json={"rental_id": rental["id"], "board_qr": "korko-02", "image_base64": img},
-                       headers=tourist)
+        # 1:35 the 6 return shots: front, back, fins, then the QR of the board, of the slot and of the station
+        rid = rental["id"]
+        wrong = d.shot(tourist, rid, "board_qr", "korko-02")
         self.assertEqual(wrong.status_code, 400)  # photo of another board: refused, nothing recorded
         self.assertIn("korko-01", wrong.json()["detail"])
-        no_qr = c.post("/api/photos", json={"rental_id": rental["id"], "image_base64": img}, headers=tourist)
-        self.assertEqual(no_qr.status_code, 400)
-        photo = c.post("/api/photos", json={"rental_id": rental["id"], "board_qr": "korko-01", "image_base64": img},
-                       headers=tourist).json()
-        self.assertEqual(photo["credited_cents"], 100)
+        self.assertEqual(d.shot(tourist, rid, "board_qr").status_code, 400)  # no QR read
+        self.assertEqual(d.shot(tourist, rid, "station_qr", "B").status_code, 400)  # not the return station
+        self.assertEqual(d.shot(tourist, rid, "slot_qr", "B-1").status_code, 400)  # a slot of another station
+        front = d.shot(tourist, rid, "front").json()
+        self.assertEqual(front["credited_cents"], 0)
+        self.assertEqual(front["missing_shots"], ["back", "fins", "board_qr", "slot_qr", "station_qr"])
+        for shot in ("back", "fins"):
+            d.shot(tourist, rid, shot)
+        photo = d.shot(tourist, rid, "board_qr", "korko-01", image=b"fake-jpeg-bytes").json()
         self.assertEqual(len(photo["sha256"]), 64)
-        twice = c.post("/api/photos", json={"rental_id": rental["id"], "board_qr": "korko-01", "image_base64": img},
-                       headers=tourist).json()
-        self.assertEqual(twice["credited_cents"], 0)
+        d.shot(tourist, rid, "slot_qr", "A-2")
+        self.assertFalse(c.get("/api/rentals/%d" % rid, headers=tourist).json()["photo_taken"])
+        last = d.shot(tourist, rid, "station_qr", "A").json()
+        self.assertEqual((last["credited_cents"], last["missing_shots"]), (100, []))  # +1 €, once
+        again = d.shot(tourist, rid, "front").json()
+        self.assertEqual(again["credited_cents"], 0)
         self.assertEqual(c.get("/api/me", headers=tourist).json()["wallet_cents"], 300)
-        self.assertTrue(c.get("/api/rentals/%d" % rental["id"], headers=tourist).json()["photo_taken"])
+        view = c.get("/api/rentals/%d" % rid, headers=tourist).json()
+        self.assertTrue(view["photo_taken"])
+        self.assertEqual(view["photos_missing"], [])
 
         # 1:50 passport of korko-01
         p = c.get("/api/boards/korko-01/passport").json()
@@ -249,6 +269,7 @@ class DemoScenarioTest(unittest.TestCase):
         d.event(100, "TIC", station="A")
         f = self.client.get("/api/fleet").json()
         self.assertTrue(any(a["kind"] == "station_offline" and a["station"] == "B" for a in f["alerts"]))
+        self.assertEqual(f["station_offline_after_s"], 60)
         d.event(101, "TIC", station="B")
         f = self.client.get("/api/fleet").json()
         self.assertFalse(any(a["kind"] == "station_offline" for a in f["alerts"]))
@@ -282,9 +303,7 @@ class DemoScenarioTest(unittest.TestCase):
     def test_photo_damage_suggestion_then_fee_withheld(self):
         c = self.client
         h, rid = self._returned_rental("+33611110000")
-        img = base64.b64encode(b"fake-jpeg").decode()
-        out = c.post("/api/photos", json={"rental_id": rid, "board_qr": "korko-01", "image_base64": img,
-                                          "damage_zone": "fin"}, headers=h).json()
+        out = self.demo.shot(h, rid, "fins", damage_zone="fin").json()
         self.assertTrue(out["damage_detected"])
         photos = c.get("/api/photos").json()
         self.assertEqual(photos[0]["suggestion"]["actions"][0]["fee_cents"], 3000)
@@ -312,10 +331,7 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertEqual(c.post("/api/rentals/%d/withhold" % rid, json={"zone": "nose"}).status_code, 400)
 
     def _photo(self, headers, rental_id, board):
-        img = base64.b64encode(b"fake-jpeg").decode()
-        r = self.client.post("/api/photos", json={"rental_id": rental_id, "board_qr": board, "image_base64": img},
-                             headers=headers)
-        self.assertEqual(r.status_code, 200, r.text)
+        self.demo.return_photos(headers, rental_id, board)
 
     def test_deposit_waits_for_the_return_photo(self):
         c, d = self.client, self.demo
@@ -354,6 +370,7 @@ class DemoScenarioTest(unittest.TestCase):
         qr = c.get("/api/qr-codes").json()
         self.assertEqual(qr["racks"][0]["path"], "/s/A")
         self.assertEqual(len(qr["boards"]), 6)
+        self.assertEqual(qr["slots"][0], {"id": "A-1", "station": "A", "label": "Rack A · emplacement 1", "path": "/s/A?slot=1"})
 
     def test_customer_language_for_errors_and_sms(self):
         c = self.client

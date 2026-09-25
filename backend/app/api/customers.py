@@ -106,7 +106,7 @@ def profile(db: Session, customer: Customer, settings: Settings) -> dict[str, An
                          .order_by(Rental.id.desc())).first()
     history = db.scalars(select(Rental).where(Rental.customer_id == customer.id,
                                               Rental.status.in_(("returned", "bought")))
-                         .order_by(Rental.id.desc()).limit(10)).all()
+                         .order_by(Rental.id.desc()).limit(50)).all()
     ledger = db.scalars(select(WalletEntry).where(WalletEntry.customer_id == customer.id)
                         .order_by(WalletEntry.id.desc()).limit(20)).all()
     now = clock(db)

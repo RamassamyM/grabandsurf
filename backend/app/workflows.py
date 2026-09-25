@@ -6,13 +6,14 @@ from domain/, effects from services/, and the time is always the flow clock.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db import advance_clock, get_clock
-from .domain import fleet, pricing, wallet
+from .domain import fleet, pricing, return_photos, wallet
 from .domain.fleet import STATUS_LABELS, format_duration
 from .domain.packs import minutes_left
 from .domain.pricing import format_eur
@@ -97,9 +98,27 @@ def available_boards(db: Session, station: str) -> list[str]:
 
 # ------------------------------------------------------------------ rentals
 
+def station_slots(config: dict[str, Any], station: Optional[str]) -> int:
+    """Number of slots (hooks) of a rack, each with its own QR code."""
+    return int(config["stations"].get(station or "", {}).get("slots", 3))
+
+
+def return_shots(db: Session, rental: Rental) -> list[str]:
+    """Return shots already sent for a rental (front, back, fins, board_qr, slot_qr, station_qr)."""
+    shots = []
+    for raw in db.scalars(select(Photo.ai_result).where(Photo.rental_id == rental.id)):
+        try:
+            shot = json.loads(raw or "{}").get("shot")
+        except ValueError:
+            shot = None
+        if shot:
+            shots.append(shot)
+    return shots
+
+
 def has_return_photo(db: Session, rental: Rental) -> bool:
-    """A photo of the rented board (its QR read) was sent for this rental."""
-    return db.scalar(select(Photo.id).where(Photo.rental_id == rental.id, Photo.board_id == rental.board_id)) is not None
+    """All the return shots were sent: the deposit may be freed."""
+    return return_photos.complete(return_shots(db, rental))
 
 
 def rental_view(db: Session, rental: Rental, config: dict[str, Any], now_t: float) -> dict[str, Any]:
@@ -130,7 +149,8 @@ def rental_view(db: Session, rental: Rental, config: dict[str, Any], now_t: floa
         }
         view["photo_credited"] = db.scalar(select(Photo.id).where(
             Photo.rental_id == rental.id, Photo.rewarded.is_(True))) is not None
-        view["photo_taken"] = has_return_photo(db, rental)
+        view["photos_missing"] = return_photos.missing_shots(return_shots(db, rental))
+        view["photo_taken"] = not view["photos_missing"]
     return view
 
 

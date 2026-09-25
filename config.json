@@ -21,13 +21,13 @@
   },
   "stations": {
     "A": {
-      "name": "Grande Plage"
+      "name": "Grande Plage", "slots": 3
     },
     "B": {
-      "name": "Côte des Basques"
+      "name": "Côte des Basques", "slots": 3
     },
     "C": {
-      "name": "Milady"
+      "name": "Milady", "slots": 3
     }
   },
   "fleet": {

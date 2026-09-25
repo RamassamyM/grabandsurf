@@ -33,7 +33,9 @@ class ManualReturn(BaseModel):
 
 class PhotoUpload(BaseModel):
     rental_id: int
-    board_qr: Optional[str] = None
+    shot: Optional[str] = None  # front, back, fins, board_qr, slot_qr, station_qr (none: board_qr)
+    qr: Optional[str] = None  # what the phone read on a QR shot: korko-01, A-2, A
+    board_qr: Optional[str] = None  # older clients
     image_base64: str = Field(default="", max_length=8_000_000)
     damage_zone: Optional[str] = None
 

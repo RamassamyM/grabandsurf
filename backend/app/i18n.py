@@ -68,6 +68,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "fr": "Le QR gravé de {board} doit être lisible sur la photo.",
         "en": "The engraved QR code of {board} must be readable on the photo.",
         "es": "El QR grabado de {board} debe leerse en la foto."},
+    "wrong_station_qr": {
+        "fr": "Ce QR n'est pas celui de la station {station} où ta planche est raccrochée.",
+        "en": "This QR code is not the one of station {station} where your board is hung.",
+        "es": "Este QR no es el de la estación {station} donde está colgada tu tabla."},
+    "wrong_slot_qr": {
+        "fr": "Ce QR n'est pas celui d'un emplacement de la station {station}.",
+        "en": "This QR code is not the one of a slot of station {station}.",
+        "es": "Este QR no es el de un hueco de la estación {station}."},
+    "return_first": {
+        "fr": "Raccroche d'abord ta planche au rack, puis prends les photos.",
+        "en": "Hang your board back on the rack first, then take the photos.",
+        "es": "Primero vuelve a colgar tu tabla en el rack y luego haz las fotos."},
+    "shot_unknown": {
+        "fr": "Photo inconnue.", "en": "Unknown photo.", "es": "Foto desconocida."},
+    "photo_shot_saved": {
+        "fr": "Photo enregistrée. Encore {count} à prendre.",
+        "en": "Photo saved. {count} more to take.",
+        "es": "Foto guardada. Faltan {count}."},
     "board_unknown": {
         "fr": "Planche inconnue.", "en": "Unknown board.", "es": "Tabla desconocida."},
     "image_unreadable": {

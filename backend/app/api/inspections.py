@@ -9,13 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import get_db, get_services, get_settings, require_operator
-from ..domain import repairs
+from ..domain import repairs, return_photos
 from ..domain.fleet import format_duration
 from ..models import Board, CardHold, DamageReport, Inspection, Photo, Rental
 from ..schemas import RoleRequest, WithholdRequest
 from ..services import Services
 from ..settings import Settings
-from ..workflows import clock, has_return_photo, open_damage_reports, phone_of, release_deposit, withhold_repair
+from ..workflows import clock, has_return_photo, return_shots, open_damage_reports, phone_of, release_deposit, withhold_repair
 from .fleet import mask_phone
 from .photos import fee_grid, photo_view
 
@@ -37,6 +37,7 @@ def session_view(db: Session, r: Rental, settings: Settings, now: float) -> dict
         "deposit_status": r.deposit_status, "deposit_label": DEPOSIT_LABELS.get(r.deposit_status, r.deposit_status),
         "deposit_left_cents": (hold.amount_cents - hold.captured_cents) if hold and hold.status == "authorized" else 0,
         "photo_missing": not has_return_photo(db, r),
+        "photos_missing": return_photos.missing_shots(return_shots(db, r)),
         "auto_release_in": format_duration(max(0, r.deposit_due_t - now))
         if r.deposit_due_t and r.deposit_status == "pending_check" and has_return_photo(db, r) else None,
         "checked_role": r.checked_role,

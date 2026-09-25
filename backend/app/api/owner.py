@@ -10,8 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import get_db, get_settings, require_operator
+from ..domain import return_photos
 from ..models import Board, RepairFee, Station
 from ..settings import Settings
+from ..workflows import station_slots
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_operator)])
 
@@ -55,11 +57,16 @@ def update_repair_fees(body: list[RepairFeeUpdate], db: Session = Depends(get_db
 
 
 @router.get("/qr-codes")
-def qr_codes(db: Session = Depends(get_db)) -> dict[str, Any]:
-    """What to print: one QR per rack (rent) and one per board (passport, return, damage)."""
+def qr_codes(db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    """What to print: one QR per rack (rent), per board (passport, return, damage) and per rack slot."""
     return {
         "racks": [{"id": s.id, "label": "Rack %s · %s" % (s.id, s.name), "path": "/s/%s" % s.id}
                   for s in db.scalars(select(Station).order_by(Station.id))],
         "boards": [{"id": b.id, "label": b.id, "home_station": b.home_station, "path": "/p/%s" % b.id}
                    for b in db.scalars(select(Board).order_by(Board.id))],
+        # one QR per slot of each rack, photographed with the board hung on it at the return
+        "slots": [{"id": slot, "station": s.id, "label": "Rack %s · emplacement %s" % (s.id, slot.split("-")[1]),
+                   "path": "/s/%s?slot=%s" % (s.id, slot.split("-")[1])}
+                  for s in db.scalars(select(Station).order_by(Station.id))
+                  for slot in return_photos.slot_ids(s.id, station_slots(settings.config, s.id))],
     }
