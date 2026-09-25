@@ -53,6 +53,8 @@ def _details(db: Session, event_type: str, row: Optional[ChainTx], chain_ev: Opt
             out["signature"], out["signer"] = photo.signature, photo.signer
     if event_type == "CORRECTION":
         out["reason"] = (chain_ev or {}).get("reason") or (row.note if row else "")
+        if (chain_ev or {}).get("corrected_index") is not None:
+            out["corrected_index"] = chain_ev["corrected_index"]
     if event_type in ("SPONSORING", "FIN_SPONSORING") and row and row.note:
         out["note"] = row.note
     return out

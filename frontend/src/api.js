@@ -98,12 +98,28 @@ export const api = {
   qrCodes: () => get('/api/qr-codes'),
   // passport
   passport: (board) => get(`/api/boards/${encodeURIComponent(board)}/passport`),
+  countView: (board) => post(`/api/boards/${encodeURIComponent(board)}/views`),
+  // claim of the NFT after an implicit purchase
+  claim: (token) => get(`/api/claims/${encodeURIComponent(token)}`),
+  sendClaim: (token, wallet) => post(`/api/claims/${encodeURIComponent(token)}`, { wallet }),
+  // sponsoring
+  submitSponsorship: (partnerId, body) => post(`/api/partners/${encodeURIComponent(partnerId)}/sponsorships`, body),
+  partnerSponsorships: (partnerId) => get(`/api/partners/${encodeURIComponent(partnerId)}/sponsorships`),
+  sponsorships: () => get('/api/sponsorships'),
+  reviewSponsorship: (id, decision, role) => post(`/api/sponsorships/${id}/review`, { decision, role }),
+  endSponsorship: (id) => post(`/api/sponsorships/${id}/end`),
   // operator
   fleet: () => get('/api/fleet'),
   confirmLoss: (board, role) => post(`/api/boards/${board}/confirm-loss`, { role }),
   backInService: (board, role) => post(`/api/boards/${board}/back-in-service`, { role }),
+  correctDeparture: (board, role, reason) => post(`/api/boards/${board}/corrections`, { role, reason }),
   resolveAlert: (id) => post(`/api/alerts/${id}/resolve`),
   resetDemo: () => post('/api/fleet/reset'),
   // partner
   partnerDashboard: (id) => get(`/api/partners/${encodeURIComponent(id)}/dashboard`),
+}
+
+// True when the page runs inside the phone mockup of the demo (/demo).
+export function isEmbedded() {
+  try { return window.self !== window.top } catch { return true }
 }
