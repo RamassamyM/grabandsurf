@@ -18,7 +18,9 @@ Un backend **Python FastAPI** avec une base **SQLite via SQLAlchemy 2**, un fron
 | Serveur Node | Aucun | Vite ne sert qu'au développement ; le backend sert `frontend/dist` en démo |
 | Temps réel | Rafraîchissement toutes les 2 s | Plus simple et plus robuste que des WebSockets |
 | Blockchain | Avalanche Fuji, ERC-721, web3.py | Déjà déployé et vérifié ; l'usager ne signe rien |
-| IA photo | Réponse simulée (service factice) | La démo ne dépend ni du réseau ni d'une clé ; un vrai modèle se branche dans `services/photo_ai.py` |
+| IA photo | Claude vision (`claude-opus-5`, sortie JSON structurée) si `ANTHROPIC_API_KEY`, sinon simulation | Diagnostic réel en démo, et la location ne dépend jamais du réseau |
+| QR codes | `jsqr` (lecture caméra et photo) et `qrcode` (planche à imprimer), côté navigateur | Rien à installer côté serveur, lecture sur le téléphone |
+| Langues | FR, EN, ES pour les pages client (`src/i18n.jsx`) et les erreurs et SMS (`backend/app/i18n.py`) | Touristes étrangers sur la côte basque |
 | Tests | unittest + client de test FastAPI | Rien à installer côté tests ; l'e2e rejoue la démo |
 | CI | GitHub Actions | Tests Python, build du front et contrôle des tirets cadratins à chaque PR |
 
@@ -120,14 +122,15 @@ SQLite dans `data/grabandsurf.db` (ou `DATABASE_URL`). **Montants en centimes (e
 | `app_state` | key, value (horloge du flux) |
 | `stations` | id, name, last_seen_t, offline_alerted |
 | `boards` | id (korko-01…), token_id, home_station, current_station, status, status_t, rentals_count, needs_review |
-| `customers` | id, phone (unique), referral_code (unique), referred_by_id, sponsor_rewarded, card_hold_status, card_last4 |
+| `customers` | id, phone (unique), referral_code (unique), referred_by_id, sponsor_rewarded, card_hold_status, card_last4, lang |
 | `otp_codes` | phone, code, expires_t, used |
-| `rentals` | id, customer_id, board_id, suggested_board_id, start_station, end_station, armed_t, start_t, end_t, status, return_mode, pack_code_id, pack_minutes, gross_cents, price_cents, wallet_used_cents, charged_cents, reminder_sent |
+| `rentals` | id, customer_id, board_id, suggested_board_id, start_station, end_station, armed_t, start_t, end_t, status, return_mode, pack_code_id, pack_minutes, gross_cents, price_cents, wallet_used_cents, charged_cents, reminder_sent, deposit_status, deposit_due_t, checked_role |
 | `card_holds` | id, customer_id, rental_id, amount_cents, captured_cents, status (authorized, captured, released) |
 | `wallet_ledger` | id, customer_id, amount_cents (+/-), reason (photo, referral_guest, referral_sponsor, rental_discount), rental_id |
 | `photos` | id, rental_id, board_id, sha256, path, ai_result (JSON), rewarded, validated |
-| `damage_reports` | id, board_id, rental_id, zone, photo_id, status (to_review, confirmed, rejected), fee_cents, reviewer_role |
+| `damage_reports` | id, board_id, rental_id, zone, severity, description, source (customer, photo_ai, inspection), photo_id, status, suggested_fee_cents, fee_cents, charged, reviewer_role |
 | `inspections` | id, board_id, kind, **role** (jamais de nom), t |
+| `repair_fees` | zone, label, fee_cents (grille du propriétaire, conservée à la remise à zéro) |
 | `partners`, `packs`, `pack_codes` | partenaire ; pack (heures, prix) ; codes (quota et minutes utilisées) |
 | `station_events` | station, board_id, type, t ; **unique (station, board_id, type, t)** = anti-doublon |
 | `alerts` | kind (theft, not_returned, station_offline, damage, unknown_board), board_id, station, message, resolved |
@@ -159,6 +162,12 @@ La doc interactive est sur `http://localhost:9000/docs` : **c'est le contrat ent
 | `POST /api/photos` | Photo de retour `{rental_id, board_qr, image_base64, damage_zone?}` → diagnostic, +1 € |
 | `POST /api/damage-reports` | Signaler une casse `{board_id, zone}` |
 | `POST /api/damage-reports/{id}/review` | Exploitant : `{decision: confirm|reject, role}` |
+| `GET /api/photos`, `GET /api/photos/{id}/image` | Exploitant : photos de retour, diagnostic IA et suggestion de réparation |
+| `GET /api/inspections` | Sessions dont la caution attend la vérification |
+| `POST /api/rentals/{id}/release-deposit` | Valider l'état et libérer la caution `{role}` |
+| `POST /api/rentals/{id}/withhold` | Retenir un forfait `{role, zone, severity, fee_cents?, send_to_workshop?}` |
+| `GET /api/repair-fees`, `PUT /api/repair-fees` | Grille des forfaits du propriétaire |
+| `GET /api/qr-codes` | Racks et planches à imprimer en QR |
 | `GET /api/boards/{id}/passport` | Carnet de vie, minutes surfées, réparations, preuves, ambassadeur |
 | `GET /api/fleet` | Exploitant : planches, stations, alertes, missions, CA, locations, blockchain |
 | `GET /api/missions`, `GET /api/chain` | Les 3 missions ; état de la blockchain |
@@ -176,6 +185,8 @@ La doc interactive est sur `http://localhost:9000/docs` : **c'est le contrat ent
 | Prix | `domain/pricing.price_cents` | 0,20 €/min par minute entamée, forfait journée 30 € par 24 h, jamais au-dessus de la caution (300 €) |
 | Ordre de facturation | `domain/pricing.quote` | minutes du pack d'abord, puis prix, puis cagnotte |
 | Rappel SMS | `pricing.reminder_due` | après `reminder_after_s` (600 s en démo) |
+| **Caution après retour** | `workflows.release_deposit`, `withhold_repair` | prix prélevé au retour, le reste attend la vérification : libération par l'exploitant, à la location suivante sans signalement, ou après `deposit_release_after_s` (8 h) |
+| Forfait de réparation | `domain/repairs` | grille par zone (`repair_fees`) x gravité (`repairs.severity_percent`), plafonné à la caution restante |
 | **Seuil de non-retour** | `pricing.not_returned` | après `not_returned_after_s` (1800 s) : statut « non rendue », alerte, SMS ; **aucun prélèvement** |
 | **Achat implicite** | `POST /api/boards/{id}/confirm-loss` | seulement après confirmation de l'exploitant : caution capturée, planche vendue, PERDUE on-chain |
 | Location armée | `workflows.run_timers` | annulée après `armed_valid_s` (300 s) si aucune planche ne part |
@@ -193,6 +204,8 @@ La doc interactive est sur `http://localhost:9000/docs` : **c'est le contrat ent
 | `/s/:station` | Client : inscription (code SMS affiché en démo), carte fictive, louer avec code pack facultatif, session en direct, reçu, photo, cagnotte, parrainage et partage, boîte SMS de démo, retour de secours |
 | `/p/:board` | Passeport : sessions, minutes surfées, réparations, carnet de vie avec preuves, ambassadeur fictif, partager, photo de retour, rendre la planche, signaler une casse |
 | `/operator` | Exploitant : missions, CA, stations, alertes (bip sonore activable), planches colorées par statut, casses à valider, confirmer une perte, remettre en service, blockchain et liens, remise à zéro |
+| `/operator/inspection` | Inspection : photos et diagnostics, casses, libérer la caution ou retenir un forfait |
+| `/owner` | Propriétaire : planche de QR à imprimer, grille des forfaits de réparation |
 | `/partner/:id` | Partenaire : heures achetées et utilisées, sessions, personnes, codes, preuves ; jamais de nom |
 
 `src/api.js` est le seul fichier qui appelle le backend. En démo, `scripts/dev.sh --build` compile le front et le backend le sert sur le port 9000.
