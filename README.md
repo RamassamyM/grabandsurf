@@ -124,6 +124,16 @@ Remettre la démo à zéro : bouton en bas de la page exploitant, ou `python -m 
   dans un téléphone, avec en bas le navigateur, l'appareil photo (des QR factices à toucher pour « scanner »
   un rack ou une planche) et les messages (les SMS reçus, liens cliquables).
 
+## Site vitrine
+
+- `/` est la landing page publique (FR, EN, ES) : le concept repris du pitch, le passeport des planches,
+  les ambassadeurs, les offres (écoles, marque, entreprises, sponsors) et la carte des spots en France et
+  en Espagne avec zoom et recherche. Les racks ouverts affichent en direct le nombre de planches libres.
+- Charte du pitch : bleu nuit `#0B2533`, turquoise `#1BA8C8`, soleil `#F7B32B`, polices Outfit et Kaushan Script
+  (servies depuis `frontend/public/fonts`). Les spots sont dans `frontend/src/pages/landing/spots.js`.
+- Carte : Leaflet avec les fonds CARTO / OpenStreetMap (sans clé, attribution affichée).
+- L'ancien menu des pages de démo est maintenant sur `/app`.
+
 ## 3. Tests
 
 ```
