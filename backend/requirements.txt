@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+sqlalchemy>=2.0
+httpx>=0.27
+# blockchain (optional: without it the chain runs in simulation mode)
+web3>=7,<9

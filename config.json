@@ -1,0 +1,60 @@
+{
+  "currency": "EUR",
+  "pricing": {
+    "price_per_minute_cents": 20,
+    "day_pass_cents": 3000,
+    "deposit_hold_cents": 30000
+  },
+  "timers": {
+    "reminder_after_s": 600,
+    "not_returned_after_s": 1800,
+    "station_offline_after_s": 60,
+    "otp_valid_s": 600
+  },
+  "rewards": {
+    "return_photo_cents": 100,
+    "referral_sponsor_cents": 200,
+    "referral_referee_cents": 200,
+    "referral_max_per_sponsor": 10
+  },
+  "stations": {
+    "A": {
+      "name": "Grande Plage"
+    },
+    "B": {
+      "name": "Côte des Basques"
+    },
+    "C": {
+      "name": "Milady"
+    }
+  },
+  "fleet": {
+    "korko-01": "A",
+    "korko-02": "A",
+    "korko-03": "B",
+    "korko-04": "B",
+    "korko-05": "C",
+    "korko-06": "C"
+  },
+  "partners": {
+    "maif": {
+      "name": "MAIF"
+    }
+  },
+  "packs": {
+    "MAIF-SURF": {
+      "partner": "maif",
+      "minutes": 600
+    }
+  },
+  "packs_rules": {
+    "volume_discount_percent": 20
+  },
+  "repair_fees_cents": {
+    "fin": 3000,
+    "nose": 4000,
+    "rail": 3000,
+    "shock": 5000,
+    "other": 2000
+  }
+}
