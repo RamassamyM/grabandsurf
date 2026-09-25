@@ -60,7 +60,7 @@ Branche `chore/architecture`, partie de `main` (avec les docs poussées hier soi
 - Polices Google Fonts (Fraunces, DM Sans) avec repli système : si le Wi-Fi tombe, l'app reste lisible.
 - Textes en français seulement : la consigne de la nuit le demandait ; l'anglais reste à faire.
 - `scripts/check_em_dash.py` ajouté et lancé en CI : règle « aucun tiret cadratin ».
-- PR ouverte via l'outil GitHub de la session (pas de `gh` ici), en brouillon, sans merge.
+- PR ouverte en brouillon via l'outil GitHub de la session (pas de `gh` ici), sans merge : https://github.com/RamassamyM/grabandsurf/pull/1
 
 ## Lancer la démo
 
