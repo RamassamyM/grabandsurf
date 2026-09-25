@@ -1,0 +1,13 @@
+{
+  "name": "grabandsurf-contract-tools",
+  "private": true,
+  "type": "module",
+  "description": "Compiles KorkoBoardV2.sol (solc-js 0.8.24, OpenZeppelin 5.0.2). Only needed to change the contract.",
+  "scripts": {
+    "compile": "node compile.mjs"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "5.0.2",
+    "solc": "0.8.24"
+  }
+}
