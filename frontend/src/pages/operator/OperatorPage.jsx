@@ -1,55 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
-import { api, session } from '../../api.js'
-import { Button, Card, ErrorNote, Logo, Money, Spinner, StatusBadge, TxLink, formatDuration, usePoll } from '../../components/ui.jsx'
+import { Link } from 'react-router-dom'
+import {
+  AlertTriangle, ArrowRight, Bell, BellOff, Camera, CheckCircle2, Clock, Coins, HelpCircle, Link2, RadioTower, RotateCcw,
+  ShieldAlert, Siren, Waves, Wrench,
+} from 'lucide-react'
+import { api } from '@/api.js'
+import { PageTitle, PinGate, StaffLayout, useRole } from '@/components/Layout.jsx'
+import {
+  ConfirmDialog, ErrorNote, Money, Spinner, Stat, StatusBadge, TxLink, formatDuration, usePoll,
+} from '@/components/common.jsx'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 
-const ROLES = [['exploitant', 'Exploitant'], ['tournee', 'Tournée'], ['reparateur', 'Réparateur'], ['ecole', 'École de surf']]
-const ALERT_ICONS = { theft: '🚨', not_returned: '⏱', station_offline: '📡', damage: '🩹', unknown_board: '❓' }
+const ALERT_ICONS = { theft: Siren, not_returned: Clock, station_offline: RadioTower, damage: Wrench, unknown_board: HelpCircle }
 
 // Operator dashboard: one page, refreshed every 2 seconds.
-const ROLE_KEY = 'gs_operator_role'
-
-// The validator's role (never a name), shared by the staff pages.
-export function useRole() {
-  const [role, setRoleState] = useState(() => {
-    try { return localStorage.getItem(ROLE_KEY) || 'exploitant' } catch { return 'exploitant' }
-  })
-  const setRole = (r) => { setRoleState(r); try { localStorage.setItem(ROLE_KEY, r) } catch { /* private mode */ } }
-  return [role, setRole]
-}
-
-export function StaffHeader({ role, setRole, children }) {
-  const links = [['/operator', 'Tableau de bord'], ['/operator/inspection', 'Inspection'], ['/owner', 'Propriétaire']]
-  return (
-    <header className="bg-ocean-900 text-white print:hidden">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link to="/" className="rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
-          <nav className="flex gap-1 text-sm">
-            {links.map(([to, label]) => (
-              <NavLink key={to} to={to} end className={({ isActive }) =>
-                `rounded-lg px-3 py-1 ${isActive ? 'bg-white/20 font-semibold' : 'text-white/80 hover:bg-white/10'}`}>
-                {label}
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          {setRole && (
-            <label className="flex items-center gap-2">
-              Rôle
-              <select className="rounded-lg bg-white/10 px-2 py-1" value={role} onChange={(e) => setRole(e.target.value)}>
-                {ROLES.map(([v, l]) => <option key={v} value={v} className="text-ocean-900">{l}</option>)}
-              </select>
-            </label>
-          )}
-          {children}
-        </div>
-      </div>
-    </header>
-  )
-}
-
 export default function OperatorPage() {
   const { data, error, reload } = usePoll(() => api.fleet(), 2000, [])
   const photos = usePoll(() => api.photos(), 4000, [])
@@ -58,49 +29,57 @@ export default function OperatorPage() {
   useAlarmBeep(data, sound)
 
   if (error && error.status === 401) return <PinGate onSaved={reload} />
+  const boards = data?.boards || []
+  const count = (...statuses) => boards.filter((b) => statuses.includes(b.status)).length
   return (
-    <div className="min-h-dvh bg-sand-100">
-      <StaffHeader role={role} setRole={setRole}>
-        <button onClick={() => setSound(!sound)} className="rounded-lg bg-white/10 px-3 py-1">
-          {sound ? '🔔 Son activé' : '🔕 Activer le son'}
-        </button>
-        {data && <span className="text-white/70">t = {Math.round(data.now_t)} s</span>}
-      </StaffHeader>
+    <StaffLayout role={role} setRole={setRole} actions={(
+      <>
+        <label className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 font-bold">
+          {sound ? <Bell className="h-4 w-4 text-sun" /> : <BellOff className="h-4 w-4 text-white/60" />}
+          <span className="hidden md:inline">Son</span>
+          <Switch checked={sound} onCheckedChange={setSound} aria-label="Activer le son des alarmes" />
+        </label>
+        {data && <span className="rounded-full bg-white/10 px-3 py-1.5 font-mono text-xs text-white/70">t = {Math.round(data.now_t)} s</span>}
+      </>
+    )}>
+      <PageTitle kicker="Exploitant" title="Tableau de bord" />
+      {error && <ErrorNote error={error.message} />}
+      {!data ? <Spinner /> : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat tone="navy" icon={Coins} label="Chiffre d'affaires" value={<Money cents={data.revenue_cents} />} />
+            <Stat icon={CheckCircle2} label="Au rack" value={`${count('at_rack', 'away_from_home')} / ${boards.length}`} />
+            <Stat icon={Waves} label="En mer" value={count('at_sea', 'not_returned', 'unauthorized')} />
+            <Stat tone={data.alerts.length ? 'sun' : 'default'} icon={AlertTriangle} label="Alertes" value={data.alerts.length} />
+          </div>
 
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
-        {error && <ErrorNote error={error.message} />}
-        {!data ? <Spinner /> : (
-          <>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Missions missions={data.missions} />
-              <Card>
-                <div className="text-sm text-ocean-700">Chiffre d'affaires</div>
-                <div className="font-display text-4xl font-bold"><Money cents={data.revenue_cents} /></div>
-                <div className="mt-1 text-xs text-ocean-700/70">{data.rentals.length} location(s) terminée(s) récemment</div>
-                <Stations stations={data.stations} />
-              </Card>
-            </div>
-            {data.deposits_to_check > 0 && (
-              <Link to="/operator/inspection" className="block">
-                <Card className="border-2 border-cork-400">
-                  <span className="font-semibold">{data.deposits_to_check} caution(s) à vérifier</span>
-                  <span className="text-sm text-ocean-700"> : valider l'état des planches rendues ou retenir un forfait de réparation. Ouvrir l'inspection ›</span>
-                </Card>
-              </Link>
-            )}
-            <Alerts alerts={data.alerts} reload={reload} />
-            <Boards boards={data.boards} role={role} reload={reload} />
-            <DamageReports reports={data.damage_reports} role={role} reload={reload} />
-            <ReturnPhotos photos={photos.data || []} />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Rentals rentals={data.rentals} />
-              <Chain chain={data.chain} />
-            </div>
-            <ResetDemo reload={reload} />
-          </>
-        )}
-      </main>
-    </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Missions missions={data.missions} />
+            <Stations stations={data.stations} />
+          </div>
+
+          {data.deposits_to_check > 0 && (
+            <Link to="/operator/inspection" className="group flex items-center justify-between gap-4 rounded-2xl border-2 border-sun bg-sun/10 p-4 transition hover:bg-sun/20">
+              <div>
+                <div className="font-extrabold">{data.deposits_to_check} caution(s) à vérifier</div>
+                <div className="text-sm text-muted-foreground">Valider l'état des planches rendues ou retenir un forfait de réparation.</div>
+              </div>
+              <ArrowRight className="h-5 w-5 shrink-0 transition group-hover:translate-x-1" />
+            </Link>
+          )}
+
+          <Alerts alerts={data.alerts} reload={reload} />
+          <Boards boards={boards} role={role} reload={reload} />
+          <DamageReports reports={data.damage_reports} role={role} reload={reload} />
+          <ReturnPhotos photos={photos.data || []} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Rentals rentals={data.rentals} />
+            <Chain chain={data.chain} />
+          </div>
+          <ResetDemo reload={reload} />
+        </>
+      )}
+    </StaffLayout>
   )
 }
 
@@ -131,100 +110,118 @@ function beep() {
 
 function Missions({ missions }) {
   return (
-    <Card tone="ocean" className="md:col-span-2">
-      <div className="text-sm uppercase tracking-widest text-white/70">Missions du jour</div>
-      <ol className="mt-3 space-y-3">
+    <div className="rounded-2xl bg-navy p-5 text-white shadow-soft lg:col-span-2">
+      <div className="text-xs font-bold uppercase tracking-widest text-lagoon">Missions du jour</div>
+      <ol className="mt-4 space-y-3">
         {missions.map((m, i) => (
           <li key={i} className="flex gap-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cork-400 font-bold">{i + 1}</span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sun text-sm font-extrabold text-navy">{i + 1}</span>
             <span className="text-lg leading-snug">{m}</span>
           </li>
         ))}
       </ol>
-    </Card>
+    </div>
   )
 }
 
 function Stations({ stations }) {
   return (
-    <div className="mt-4 space-y-1">
-      {stations.map((s) => (
-        <div key={s.id} className="flex items-center justify-between text-sm">
-          <span>Station {s.id} · {s.name}</span>
-          <span className={`flex items-center gap-1 font-medium ${s.online ? 'text-ocean-500' : s.online === false ? 'text-coral-600' : 'text-ocean-700/50'}`}>
-            <span className={`h-2 w-2 rounded-full ${s.online ? 'bg-ocean-500' : s.online === false ? 'bg-coral-500' : 'bg-ocean-700/30'}`} />
-            {s.online ? 'en ligne' : s.online === false ? 'hors ligne' : 'jamais vue'}
-          </span>
-        </div>
-      ))}
-    </div>
+    <Card>
+      <CardHeader><CardTitle>Stations</CardTitle></CardHeader>
+      <CardContent className="space-y-2">
+        {stations.map((s) => (
+          <div key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+            <span><span className="font-extrabold">{s.id}</span> · {s.name}</span>
+            <span className={cn('flex items-center gap-1.5 text-xs font-bold',
+              s.online ? 'text-ocean-700' : s.online === false ? 'text-coral' : 'text-muted-foreground')}>
+              <span className={cn('h-2 w-2 rounded-full', s.online ? 'bg-ocean' : s.online === false ? 'bg-coral' : 'bg-muted-foreground/40')} />
+              {s.online ? 'en ligne' : s.online === false ? 'hors ligne' : 'jamais vue'}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 
 function Alerts({ alerts, reload }) {
-  if (!alerts.length) return <Card><span className="text-ocean-700">Aucune alerte. Tout va bien sur la plage.</span></Card>
+  if (!alerts.length) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border bg-card p-4 text-muted-foreground shadow-soft">
+        <CheckCircle2 className="h-5 w-5 text-ocean" /> Aucune alerte. Tout va bien sur la plage.
+      </div>
+    )
+  }
   return (
-    <Card className="border-2 border-coral-400">
-      <h2 className="font-display text-xl font-semibold">Alertes ({alerts.length})</h2>
-      <ul className="mt-3 divide-y divide-sand-200">
-        {alerts.map((a) => (
-          <li key={a.id} className={`flex items-center justify-between gap-3 py-2 ${a.kind === 'theft' ? 'font-semibold text-coral-600' : ''}`}>
-            <span>{ALERT_ICONS[a.kind] || '•'} {a.message}</span>
-            <button className="shrink-0 text-xs text-ocean-700 underline" onClick={async () => { await api.resolveAlert(a.id); reload() }}>
-              Traitée
-            </button>
-          </li>
-        ))}
-      </ul>
+    <Card className="border-coral/40">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-coral" /> Alertes <Badge variant="coral">{alerts.length}</Badge></CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="divide-y">
+          {alerts.map((a) => {
+            const Icon = ALERT_ICONS[a.kind] || AlertTriangle
+            return (
+              <li key={a.id} className={cn('flex items-center justify-between gap-3 py-2.5', a.kind === 'theft' && 'font-bold text-coral')}>
+                <span className="flex items-center gap-3"><Icon className="h-4 w-4 shrink-0" /> {a.message}</span>
+                <Button variant="outline" size="sm" onClick={async () => { await api.resolveAlert(a.id); reload() }}>Traitée</Button>
+              </li>
+            )
+          })}
+        </ul>
+      </CardContent>
     </Card>
   )
 }
 
 function Boards({ boards, role, reload }) {
   const [error, setError] = useState(null)
+  const [dialog, setDialog] = useState(null)  // { kind: 'loss' | 'correction', board }
   const act = async (fn) => { setError(null); try { await fn(); await reload() } catch (e) { setError(e.message) } }
   return (
     <Card>
-      <h2 className="font-display text-xl font-semibold">Planches</h2>
-      <ErrorNote error={error} />
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {boards.map((b) => (
-          <div key={b.id} className="rounded-xl border border-sand-200 p-3">
-            <div className="flex items-center justify-between">
-              <Link to={`/p/${b.id}`} className="font-mono font-semibold underline decoration-dotted">{b.id}</Link>
-              <StatusBadge status={b.status} label={b.status_label} />
+      <CardHeader><CardTitle className="text-xl">Planches</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <ErrorNote error={error} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {boards.map((b) => (
+            <div key={b.id} className="rounded-2xl border p-4 transition hover:border-ocean/40">
+              <div className="flex items-center justify-between gap-2">
+                <Link to={`/p/${b.id}`} className="font-mono font-extrabold hover:underline">{b.id}</Link>
+                <StatusBadge status={b.status} label={b.status_label} />
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                base {b.home_station}{b.current_station && b.current_station !== b.home_station ? ` · à ${b.current_station}` : ''}
+                {' · '}{b.rentals_count} sortie(s) · depuis {b.since_label}
+              </div>
+              {b.needs_review && <Badge variant="sun" className="mt-2">casse à vérifier</Badge>}
+              {b.rental && <div className="mt-2 text-sm font-bold">{b.rental.customer} · {formatDuration(b.rental.duration_s)}</div>}
+              <div className="mt-3 flex flex-wrap gap-2 empty:hidden">
+                {['not_returned', 'unauthorized'].includes(b.status) && (
+                  <Button variant="destructive" size="sm" onClick={() => setDialog({ kind: 'loss', board: b.id })}>Confirmer la perte</Button>
+                )}
+                {b.status === 'unauthorized' && (
+                  <Button variant="outline" size="sm" onClick={() => setDialog({ kind: 'correction', board: b.id })}>Corriger (faux départ)</Button>
+                )}
+                {['workshop', 'lost', 'sold'].includes(b.status) && (
+                  <Button variant="outline" size="sm" onClick={() => act(() => api.backInService(b.id, role))}>
+                    <RotateCcw /> Remettre en service
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="mt-1 text-xs text-ocean-700/80">
-              base {b.home_station}{b.current_station && b.current_station !== b.home_station ? ` · à ${b.current_station}` : ''}
-              {' · '}{b.rentals_count} sortie(s) · depuis {b.since_label}
-              {b.needs_review && ' · casse à vérifier'}
-            </div>
-            {b.rental && <div className="mt-1 text-xs">{b.rental.customer} · {formatDuration(b.rental.duration_s)}</div>}
-            <div className="mt-2 flex flex-wrap gap-2">
-              {['not_returned', 'unauthorized'].includes(b.status) && (
-                <Button variant="danger" className="min-h-0 px-3 py-1 text-xs"
-                  onClick={() => window.confirm(`Confirmer la perte de ${b.id} après vérification du rack ?`) && act(() => api.confirmLoss(b.id, role))}>
-                  Confirmer la perte
-                </Button>
-              )}
-              {b.status === 'unauthorized' && (
-                <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs"
-                  onClick={() => {
-                    const reason = window.prompt(`Faux départ de ${b.id} : la planche est bien au rack ? Motif (inscrit sur la chaîne, sans nom)`, 'Faux départ, planche vue au rack')
-                    if (reason) act(() => api.correctDeparture(b.id, role, reason.replace(/["\\]/g, '')))
-                  }}>
-                  Corriger (faux départ)
-                </Button>
-              )}
-              {['workshop', 'lost', 'sold'].includes(b.status) && (
-                <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs" onClick={() => act(() => api.backInService(b.id, role))}>
-                  Remettre en service
-                </Button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </CardContent>
+      <ConfirmDialog open={dialog?.kind === 'loss'} onOpenChange={(o) => !o && setDialog(null)} destructive
+        title={`Confirmer la perte de ${dialog?.board || ''} ?`}
+        description="À faire seulement après avoir vérifié le rack. La perte est inscrite dans le carnet de vie de la planche."
+        confirmLabel="Confirmer la perte" onConfirm={() => act(() => api.confirmLoss(dialog.board, role))} />
+      <ConfirmDialog open={dialog?.kind === 'correction'} onOpenChange={(o) => !o && setDialog(null)}
+        title={`Faux départ de ${dialog?.board || ''}`}
+        description="La planche est bien au rack ? Le motif est inscrit sur la chaîne, sans aucun nom."
+        input={{ label: 'Motif', initial: 'Faux départ, planche vue au rack' }} confirmLabel="Corriger"
+        onConfirm={(reason) => act(() => api.correctDeparture(dialog.board, role, reason.replace(/["\\]/g, '')))} />
     </Card>
   )
 }
@@ -236,11 +233,15 @@ function DamageReports({ reports, role, reload }) {
   if (!reports.length) return null
   return (
     <Card>
-      <h2 className="font-display text-xl font-semibold">Casses à valider</h2>
-      <p className="text-xs text-ocean-700/80">L'IA propose, l'exploitant décide. Seul le rôle du validateur est enregistré.</p>
-      <ul className="mt-3 space-y-2">
-        {reports.map((d) => <DamageReview key={d.id} report={d} role={role} reload={reload} />)}
-      </ul>
+      <CardHeader>
+        <CardTitle className="text-xl">Casses à valider</CardTitle>
+        <CardDescription>L'IA propose, l'exploitant décide. Seul le rôle du validateur est enregistré.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-3">
+          {reports.map((d) => <DamageReview key={d.id} report={d} role={role} reload={reload} />)}
+        </ul>
+      </CardContent>
     </Card>
   )
 }
@@ -261,26 +262,31 @@ export function DamageReview({ report: d, role, reload }) {
     } catch (e) { setError(e.message) }
   }
   return (
-    <li className="flex flex-wrap items-start gap-3 rounded-xl bg-sand-50 p-3">
-      {d.photo_id && <img src={api.photoImageUrl(d.photo_id)} alt="" className="h-20 w-20 rounded-lg object-cover" />}
-      <div className="min-w-[200px] flex-1 text-sm">
-        <div><strong className="font-mono">{d.board_id}</strong> · zone {d.zone} · gravité {SEVERITY[d.severity] || d.severity} · source {SOURCE[d.source] || d.source}</div>
-        {d.description && <div className="text-ocean-700/80">{d.description}</div>}
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-1">Forfait
-            <input className="w-20 rounded-lg border border-sand-300 px-2 py-1" value={euros} onChange={(e) => setEuros(e.target.value)} /> €
+    <li className="flex flex-wrap items-start gap-4 rounded-2xl bg-muted p-4">
+      {d.photo_id && <img src={api.photoImageUrl(d.photo_id)} alt="" className="h-20 w-20 rounded-xl object-cover" />}
+      <div className="min-w-[220px] flex-1 space-y-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <strong className="font-mono">{d.board_id}</strong>
+          <Badge variant="outline">zone {d.zone}</Badge>
+          <Badge variant={d.severity === 'severe' ? 'coral' : 'sun'}>{SEVERITY[d.severity] || d.severity}</Badge>
+          <span className="text-xs text-muted-foreground">source {SOURCE[d.source] || d.source}</span>
+        </div>
+        {d.description && <div className="text-muted-foreground">{d.description}</div>}
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 font-bold">Forfait
+            <Input className="h-9 w-24" inputMode="decimal" value={euros} onChange={(e) => setEuros(e.target.value)} /> €
           </label>
           {d.rental_id && (
-            <label className="flex items-center gap-1"><input type="checkbox" checked={charge} onChange={(e) => setCharge(e.target.checked)} /> retenir sur la caution</label>
+            <label className="flex items-center gap-2"><Checkbox checked={charge} onCheckedChange={(v) => setCharge(Boolean(v))} /> retenir sur la caution</label>
           )}
-          <label className="flex items-center gap-1"><input type="checkbox" checked={workshop} onChange={(e) => setWorkshop(e.target.checked)} /> envoyer à l'atelier</label>
+          <label className="flex items-center gap-2"><Checkbox checked={workshop} onCheckedChange={(v) => setWorkshop(Boolean(v))} /> envoyer à l'atelier</label>
         </div>
         <ErrorNote error={error} />
       </div>
-      <span className="flex gap-2">
-        <Button className="min-h-0 px-3 py-1 text-xs" onClick={() => review('confirm')}>Valider la casse</Button>
-        <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs" onClick={() => review('reject')}>Refuser</Button>
-      </span>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => review('confirm')}>Valider la casse</Button>
+        <Button size="sm" variant="outline" onClick={() => review('reject')}>Refuser</Button>
+      </div>
     </li>
   )
 }
@@ -291,23 +297,23 @@ export function PhotoDiagnosis({ photo, compact = false }) {
   const ai = photo.ai_result || {}
   const s = photo.suggestion || { actions: [] }
   return (
-    <div className="flex flex-wrap gap-3 rounded-xl bg-sand-50 p-3 text-sm">
+    <div className="flex flex-wrap gap-4 rounded-2xl bg-muted p-4 text-sm">
       {photo.has_image
-        ? <a href={api.photoImageUrl(photo.id)} target="_blank" rel="noreferrer"><img src={api.photoImageUrl(photo.id)} alt="" className={`${compact ? 'h-20 w-20' : 'h-28 w-28'} rounded-lg object-cover`} /></a>
-        : <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-sand-200 text-xs">sans image</div>}
-      <div className="min-w-[200px] flex-1">
+        ? <a href={api.photoImageUrl(photo.id)} target="_blank" rel="noreferrer"><img src={api.photoImageUrl(photo.id)} alt="" className={cn(compact ? 'h-20 w-20' : 'h-28 w-28', 'rounded-xl object-cover')} /></a>
+        : <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-background text-muted-foreground"><Camera className="h-6 w-6" /></div>}
+      <div className="min-w-[220px] flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <strong className="font-mono">{photo.board_id}</strong>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ai.engine === 'claude' ? 'bg-ocean-500 text-white' : 'bg-sand-200'}`}>
-            {ai.engine === 'claude' ? 'IA Claude' : 'simulation'}
+          <Badge variant={ai.engine === 'claude' ? 'navy' : 'muted'}>{ai.engine === 'claude' ? 'IA Claude' : 'simulation'}</Badge>
+          <span className="text-xs text-muted-foreground">
+            QR {ai.board_read || 'non lu'} · {CONDITION[ai.overall_condition] || ai.overall_condition} · confiance {Math.round((ai.confidence || 0) * 100)} %
           </span>
-          <span className="text-xs text-ocean-700/80">QR {ai.board_read || 'non lu'} · {CONDITION[ai.overall_condition] || ai.overall_condition} · confiance {Math.round((ai.confidence || 0) * 100)} %</span>
-          {photo.rewarded && <span className="text-xs text-ocean-500">+1 € crédité</span>}
+          {photo.rewarded && <Badge variant="ocean">+1 € crédité</Badge>}
         </div>
-        {ai.summary && <p className="mt-1 text-ocean-700">{ai.summary}</p>}
-        <p className="mt-1 font-medium">{s.sentence}</p>
+        {ai.summary && <p className="text-muted-foreground">{ai.summary}</p>}
+        <p className="font-bold">{s.sentence}</p>
         {s.actions.length > 0 && (
-          <ul className="mt-1 list-disc pl-5">
+          <ul className="list-disc pl-5">
             {s.actions.map((a, i) => (
               <li key={i}>{a.action} ({a.zone}, gravité {SEVERITY[a.severity]}) : <Money cents={a.fee_cents} /></li>
             ))}
@@ -322,9 +328,11 @@ function ReturnPhotos({ photos }) {
   if (!photos.length) return null
   return (
     <Card>
-      <h2 className="font-display text-xl font-semibold">Photos de retour et diagnostics</h2>
-      <p className="text-xs text-ocean-700/80">Suggestions de réparation calculées avec la grille du propriétaire. Rien n'est retenu sans validation.</p>
-      <div className="mt-3 space-y-2">{photos.slice(0, 6).map((p) => <PhotoDiagnosis key={p.id} photo={p} />)}</div>
+      <CardHeader>
+        <CardTitle className="text-xl">Photos de retour et diagnostics</CardTitle>
+        <CardDescription>Suggestions de réparation calculées avec la grille du propriétaire. Rien n'est retenu sans validation.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">{photos.slice(0, 6).map((p) => <PhotoDiagnosis key={p.id} photo={p} />)}</CardContent>
     </Card>
   )
 }
@@ -332,20 +340,24 @@ function ReturnPhotos({ photos }) {
 function Rentals({ rentals }) {
   return (
     <Card>
-      <h2 className="font-display text-xl font-semibold">Locations terminées</h2>
-      {!rentals.length && <p className="mt-2 text-sm text-ocean-700/70">Aucune location terminée pour l'instant.</p>}
-      <table className="mt-2 w-full text-sm">
-        <tbody>
-          {rentals.map((r) => (
-            <tr key={r.id} className="border-b border-sand-200 last:border-0">
-              <td className="py-1 font-mono">{r.board_id}</td>
-              <td>{formatDuration(r.duration_s)}</td>
-              <td>{r.status === 'bought' ? 'achat implicite' : r.return_mode === 'manual' ? 'retour QR' : 'retour détecté'}</td>
-              <td className="text-right"><Money cents={r.charged_cents} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <CardHeader><CardTitle className="text-xl">Locations terminées</CardTitle></CardHeader>
+      <CardContent>
+        {!rentals.length && <p className="text-sm text-muted-foreground">Aucune location terminée pour l'instant.</p>}
+        <Table>
+          <TableBody>
+            {rentals.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-mono font-bold">{r.board_id}</TableCell>
+                <TableCell>{formatDuration(r.duration_s)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {r.status === 'bought' ? 'achat implicite' : r.return_mode === 'manual' ? 'retour QR' : 'retour détecté'}
+                </TableCell>
+                <TableCell className="text-right font-bold"><Money cents={r.charged_cents} /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
     </Card>
   )
 }
@@ -353,47 +365,38 @@ function Rentals({ rentals }) {
 function Chain({ chain }) {
   return (
     <Card>
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-xl font-semibold">Blockchain</h2>
-        <span className={`rounded-full px-2 py-1 text-xs font-bold ${chain.mode === 'real' ? 'bg-ocean-500 text-white' : 'bg-sand-200'}`}>{chain.label}</span>
-      </div>
-      {chain.contract_url
-        ? <a href={chain.contract_url} target="_blank" rel="noreferrer" className="mt-1 block break-all font-mono text-xs text-ocean-500 underline">{chain.contract}</a>
-        : <p className="mt-1 text-xs text-ocean-700/70">{chain.reason}</p>}
-      <p className="mt-1 text-xs">En attente d'écriture : {chain.pending}{chain.error ? ` · réseau : ${chain.error} (on réessaie)` : ''}</p>
-      <ul className="mt-3 space-y-1 text-sm">
-        {chain.txs.map((t) => (
-          <li key={t.id} className="flex items-center justify-between gap-2">
-            <span><span className="font-mono">{t.board_id}</span> {t.event_type} {t.station || '-'}</span>
-            <TxLink hash={t.tx_hash} url={t.url} />
-          </li>
-        ))}
-      </ul>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-xl"><Link2 className="h-5 w-5 text-ocean" /> Blockchain</CardTitle>
+          <Badge variant={chain.mode === 'real' ? 'ocean' : 'muted'}>{chain.label}</Badge>
+        </div>
+        {chain.contract_url
+          ? <a href={chain.contract_url} target="_blank" rel="noreferrer" className="break-all font-mono text-xs text-ocean-700 hover:underline">{chain.contract}</a>
+          : <CardDescription>{chain.reason}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground">En attente d'écriture : {chain.pending}{chain.error ? ` · réseau : ${chain.error} (on réessaie)` : ''}</p>
+        <ul className="mt-3 divide-y text-sm">
+          {chain.txs.map((t) => (
+            <li key={t.id} className="flex items-center justify-between gap-2 py-2">
+              <span><span className="font-mono font-bold">{t.board_id}</span> <Badge variant="muted" className="ml-1">{t.event_type}</Badge> {t.station || '-'}</span>
+              <TxLink hash={t.tx_hash} url={t.url} />
+            </li>
+          ))}
+        </ul>
+      </CardContent>
     </Card>
   )
 }
 
 function ResetDemo({ reload }) {
-  const [busy, setBusy] = useState(false)
-  const reset = async () => {
-    if (!window.confirm('Remettre la démo à zéro ? Les planches reviennent au rack. Le registre blockchain, lui, garde tout.')) return
-    setBusy(true); try { await api.resetDemo(); await reload() } finally { setBusy(false) }
-  }
-  return <div className="pb-8 text-right"><Button variant="ghost" busy={busy} onClick={reset}>Remettre la démo à zéro</Button></div>
-}
-
-export function PinGate({ onSaved }) {
-  const [pin, setPin] = useState('')
+  const [open, setOpen] = useState(false)
   return (
-    <main className="mx-auto max-w-sm px-4 py-16">
-      <Logo />
-      <Card className="mt-6">
-        <form onSubmit={(e) => { e.preventDefault(); session.setPin(pin); onSaved() }} className="space-y-3">
-          <label className="label" htmlFor="pin">Code PIN exploitant</label>
-          <input id="pin" className="input" type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} />
-          <Button className="w-full">Entrer</Button>
-        </form>
-      </Card>
-    </main>
+    <div className="flex justify-end pb-8">
+      <Button variant="outline" onClick={() => setOpen(true)}><RotateCcw /> Remettre la démo à zéro</Button>
+      <ConfirmDialog open={open} onOpenChange={setOpen} title="Remettre la démo à zéro ?"
+        description="Les planches reviennent au rack. Le registre blockchain, lui, garde tout." confirmLabel="Remettre à zéro"
+        onConfirm={async () => { await api.resetDemo(); await reload() }} />
+    </div>
   )
 }

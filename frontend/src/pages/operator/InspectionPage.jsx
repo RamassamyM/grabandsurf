@@ -1,7 +1,16 @@
 import { useState } from 'react'
-import { api } from '../../api.js'
-import { Button, Card, ErrorNote, Money, Spinner, usePoll } from '../../components/ui.jsx'
-import { DamageReview, PhotoDiagnosis, PinGate, StaffHeader, useRole } from './OperatorPage.jsx'
+import { CheckCircle2, Clock, Loader2, ShieldCheck, Wrench } from 'lucide-react'
+import { api } from '@/api.js'
+import { PageTitle, PinGate, StaffLayout, useRole } from '@/components/Layout.jsx'
+import { ErrorNote, Money, Spinner, usePoll } from '@/components/common.jsx'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DamageReview, PhotoDiagnosis } from './OperatorPage.jsx'
 
 const SEVERITIES = [['minor', 'légère'], ['moderate', 'moyenne'], ['severe', 'grave']]
 
@@ -12,30 +21,37 @@ export default function InspectionPage() {
   const [role, setRole] = useRole()
   if (error && error.status === 401) return <PinGate onSaved={reload} />
   return (
-    <div className="min-h-dvh bg-sand-100">
-      <StaffHeader role={role} setRole={setRole} />
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
-        <Card tone="ocean">
-          <h1 className="font-display text-2xl font-semibold">Inspection des retours</h1>
-          <p className="mt-1 text-white/90">
-            Le prix est prélevé au retour ; le reste de la caution attend la vérification de la planche.
-            Valide l'état pour libérer la caution, ou retiens un forfait de réparation. Sans action, la caution
-            est libérée au bout de 8 h, ou dès la location suivante de la planche sans signalement.
-          </p>
-        </Card>
-        {error && <ErrorNote error={error.message} />}
-        {!data ? <Spinner /> : (
-          <>
-            <h2 className="font-display text-xl font-semibold">À vérifier ({data.pending.length})</h2>
-            {!data.pending.length && <Card><span className="text-ocean-700">Aucune caution en attente : tout est vérifié.</span></Card>}
+    <StaffLayout role={role} setRole={setRole}>
+      <PageTitle kicker="Exploitant" title="Inspection des retours">
+        Le prix est prélevé au retour ; le reste de la caution attend la vérification de la planche. Sans action,
+        la caution est libérée au bout de 8 h, ou dès la location suivante de la planche sans signalement.
+      </PageTitle>
+      {error && <ErrorNote error={error.message} />}
+      {!data ? <Spinner /> : (
+        <>
+          <section className="space-y-3">
+            <h2 className="flex items-center gap-2 text-xl font-extrabold">
+              À vérifier <Badge variant={data.pending.length ? 'sun' : 'muted'}>{data.pending.length}</Badge>
+            </h2>
+            {!data.pending.length && (
+              <div className="flex items-center gap-3 rounded-2xl border bg-card p-4 text-muted-foreground shadow-soft">
+                <CheckCircle2 className="h-5 w-5 text-ocean" /> Aucune caution en attente : tout est vérifié.
+              </div>
+            )}
             {data.pending.map((s) => <SessionCard key={s.id} session={s} data={data} role={role} reload={reload} />)}
-            <h2 className="pt-4 font-display text-xl font-semibold">Déjà traitées</h2>
-            {!data.checked.length && <Card><span className="text-ocean-700/70">Rien pour l'instant.</span></Card>}
-            {data.checked.map((s) => <DoneRow key={s.id} session={s} />)}
-          </>
-        )}
-      </main>
-    </div>
+          </section>
+          <section className="space-y-2">
+            <h2 className="text-xl font-extrabold">Déjà traitées</h2>
+            {!data.checked.length && <p className="text-sm text-muted-foreground">Rien pour l'instant.</p>}
+            {data.checked.length > 0 && (
+              <div className="divide-y overflow-hidden rounded-2xl border bg-card shadow-soft">
+                {data.checked.map((s) => <DoneRow key={s.id} session={s} />)}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </StaffLayout>
   )
 }
 
@@ -51,33 +67,37 @@ function SessionCard({ session: s, data, role, reload }) {
   }
   return (
     <Card>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div>
-          <span className="font-mono text-lg font-semibold">{s.board_id}</span>
-          <span className="ml-2 text-sm text-ocean-700">{s.customer} · {s.duration_label} · {s.start_station} vers {s.end_station}
-            {s.return_mode === 'manual' ? ' · retour par QR' : ''}</span>
+          <div className="font-mono text-xl font-extrabold">{s.board_id}</div>
+          <div className="text-sm text-muted-foreground">
+            {s.customer} · {s.duration_label} · {s.start_station} vers {s.end_station}{s.return_mode === 'manual' ? ' · retour par QR' : ''}
+          </div>
         </div>
-        <div className="text-sm">
-          Payé <strong><Money cents={s.charged_cents} /></strong> · caution restante <strong><Money cents={s.deposit_left_cents} /></strong>
-          {s.auto_release_in && <span className="text-ocean-700/70"> · libération auto dans {s.auto_release_in}</span>}
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Badge variant="muted">payé <Money cents={s.charged_cents} /></Badge>
+          <Badge variant="ocean">caution <Money cents={s.deposit_left_cents} /></Badge>
+          {s.auto_release_in && <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> auto dans {s.auto_release_in}</Badge>}
         </div>
-      </div>
-      <div className="mt-3 space-y-2">
-        {s.photos.length === 0 && <p className="text-sm text-ocean-700/70">Pas de photo de retour : vérifier la planche au rack.</p>}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {s.photos.length === 0 && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">Pas de photo de retour : vérifier la planche au rack.</p>}
         {s.photos.map((p) => <PhotoDiagnosis key={p.id} photo={p} compact />)}
-      </div>
-      {openReports.length > 0 && (
-        <ul className="mt-3 space-y-2">
-          {openReports.map((d) => <DamageReview key={d.id} report={{ ...d, board_id: s.board_id, rental_id: s.id }} role={role} reload={reload} />)}
-        </ul>
-      )}
-      <div className="mt-3"><ErrorNote error={error} /></div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button busy={busy} disabled={openReports.length > 0} onClick={release}>Valider l'état et libérer la caution</Button>
-        <Button variant="ghost" onClick={() => setWithhold(!withhold)}>Retenir un forfait de réparation</Button>
-      </div>
-      {openReports.length > 0 && <p className="mt-1 text-xs text-ocean-700/70">Valide ou refuse d'abord la casse signalée.</p>}
-      {withhold && <WithholdForm session={s} data={data} role={role} reload={reload} />}
+        {openReports.length > 0 && (
+          <ul className="space-y-2">
+            {openReports.map((d) => <DamageReview key={d.id} report={{ ...d, board_id: s.board_id, rental_id: s.id }} role={role} reload={reload} />)}
+          </ul>
+        )}
+        <ErrorNote error={error} />
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy || openReports.length > 0} onClick={release}>
+            {busy ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Valider l'état et libérer la caution
+          </Button>
+          <Button variant="outline" onClick={() => setWithhold(!withhold)}><Wrench /> Retenir un forfait de réparation</Button>
+        </div>
+        {openReports.length > 0 && <p className="text-xs text-muted-foreground">Valide ou refuse d'abord la casse signalée.</p>}
+        {withhold && <WithholdForm session={s} data={data} role={role} reload={reload} />}
+      </CardContent>
     </Card>
   )
 }
@@ -95,37 +115,45 @@ function WithholdForm({ session: s, data, role, reload }) {
   const [workshop, setWorkshop] = useState(severity !== 'minor')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const cents = Math.round(parseFloat(String(euros).replace(',', '.')) * 100) || 0
   const pick = (z, sv) => { setZone(z); setSeverity(sv); setEuros((suggestedFor(z, sv) / 100).toFixed(2)); setWorkshop(sv !== 'minor') }
   const submit = async () => {
     setBusy(true); setError(null)
     try {
-      await api.withhold(s.id, { role, zone, severity, description, send_to_workshop: workshop,
-        fee_cents: Math.round(parseFloat(String(euros).replace(',', '.')) * 100) || 0 })
+      await api.withhold(s.id, { role, zone, severity, description, send_to_workshop: workshop, fee_cents: cents })
       await reload()
     } catch (e) { setError(e.message) }
     setBusy(false)
   }
   return (
-    <div className="mt-3 grid gap-3 rounded-xl bg-sand-50 p-3 text-sm sm:grid-cols-2">
-      <label>Zone
-        <select className="input mt-1 py-2" value={zone} onChange={(e) => pick(e.target.value, severity)}>
-          {data.repair_zones.map((z) => <option key={z.zone} value={z.zone}>{z.zone}</option>)}
-        </select>
-      </label>
-      <label>Gravité
-        <select className="input mt-1 py-2" value={severity} onChange={(e) => pick(zone, e.target.value)}>
-          {SEVERITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-      </label>
-      <label>Forfait retenu (€, plafonné à la caution restante)
-        <input className="input mt-1 py-2" value={euros} onChange={(e) => setEuros(e.target.value)} />
-      </label>
-      <label>Constat
-        <input className="input mt-1 py-2" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. éclat de 2 cm sur le rail gauche" />
-      </label>
-      <label className="flex items-center gap-2"><input type="checkbox" checked={workshop} onChange={(e) => setWorkshop(e.target.checked)} /> envoyer la planche à l'atelier</label>
+    <div className="grid gap-4 rounded-2xl border bg-muted/50 p-4 text-sm sm:grid-cols-2">
+      <div className="space-y-2">
+        <Label>Zone</Label>
+        <Select value={zone} onValueChange={(v) => pick(v, severity)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>{data.repair_zones.map((z) => <SelectItem key={z.zone} value={z.zone}>{z.label || z.zone}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Gravité</Label>
+        <Select value={severity} onValueChange={(v) => pick(zone, v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>{SEVERITIES.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`fee-${s.id}`}>Forfait retenu (€, plafonné à la caution restante)</Label>
+        <Input id={`fee-${s.id}`} inputMode="decimal" value={euros} onChange={(e) => setEuros(e.target.value)} />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`desc-${s.id}`}>Constat</Label>
+        <Input id={`desc-${s.id}`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ex. éclat de 2 cm sur le rail gauche" />
+      </div>
+      <label className="flex items-center gap-2"><Checkbox checked={workshop} onCheckedChange={(v) => setWorkshop(Boolean(v))} /> envoyer la planche à l'atelier</label>
       <div className="sm:col-span-2"><ErrorNote error={error} /></div>
-      <Button variant="danger" busy={busy} onClick={submit}>Retenir <Money cents={Math.round(parseFloat(String(euros).replace(',', '.')) * 100) || 0} /> et libérer le reste</Button>
+      <Button variant="destructive" className="sm:col-span-2 sm:justify-self-start" disabled={busy} onClick={submit}>
+        {busy && <Loader2 className="animate-spin" />} Retenir <Money cents={cents} /> et libérer le reste
+      </Button>
     </div>
   )
 }
@@ -133,12 +161,12 @@ function WithholdForm({ session: s, data, role, reload }) {
 function DoneRow({ session: s }) {
   const charged = s.damage_reports.filter((d) => d.charged)
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-4 py-2 text-sm shadow-card">
-      <span><span className="font-mono font-semibold">{s.board_id}</span> · {s.duration_label} · payé <Money cents={s.charged_cents} /></span>
-      <span>
-        caution {s.deposit_label}
-        {charged.map((d) => <span key={d.id}> · {d.zone} <Money cents={d.fee_cents} /></span>)}
-        {s.checked_role && <span className="text-ocean-700/70"> · par rôle {s.checked_role}</span>}
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+      <span><span className="font-mono font-extrabold">{s.board_id}</span> · {s.duration_label} · payé <Money cents={s.charged_cents} /></span>
+      <span className="flex flex-wrap items-center gap-2">
+        <Badge variant="ocean">caution {s.deposit_label}</Badge>
+        {charged.map((d) => <Badge key={d.id} variant="coral">{d.zone} <Money cents={d.fee_cents} /></Badge>)}
+        {s.checked_role && <span className="text-xs text-muted-foreground">par rôle {s.checked_role}</span>}
       </span>
     </div>
   )
