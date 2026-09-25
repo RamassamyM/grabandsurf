@@ -1,4 +1,5 @@
 // The only place that calls the backend.
+import { currentLang, translate } from './i18n.jsx'
 
 const TOKEN_KEY = 'gs_token'
 const PHONE_KEY = 'gs_phone'
@@ -43,7 +44,7 @@ export class ApiError extends Error {
 }
 
 async function request(method, path, body) {
-  const headers = { 'Content-Type': 'application/json' }
+  const headers = { 'Content-Type': 'application/json', 'X-Lang': currentLang() }
   const token = session.token()
   if (token) headers.Authorization = `Bearer ${token}`
   const pin = session.pin()
@@ -52,7 +53,7 @@ async function request(method, path, body) {
   try {
     res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
   } catch {
-    throw new ApiError('Réseau indisponible. Réessaie dans un instant.', 0)
+    throw new ApiError(translate(currentLang(), 'network'), 0)
   }
   const data = await res.json().catch(() => null)
   if (!res.ok) throw new ApiError((data && data.detail) || `Erreur ${res.status}`, res.status)
@@ -61,6 +62,7 @@ async function request(method, path, body) {
 
 const get = (path) => request('GET', path)
 const post = (path, body = {}) => request('POST', path, body)
+const put = (path, body) => request('PUT', path, body)
 
 export const api = {
   // stations
@@ -82,7 +84,18 @@ export const api = {
   uploadPhoto: (rentalId, boardQr, imageBase64, damageZone) =>
     post('/api/photos', { rental_id: rentalId, board_qr: boardQr, image_base64: imageBase64, damage_zone: damageZone || null }),
   reportDamage: (boardId, zone) => post('/api/damage-reports', { board_id: boardId, zone }),
-  reviewDamage: (id, decision, role) => post(`/api/damage-reports/${id}/review`, { decision, role }),
+  reviewDamage: (id, decision, role, options = {}) =>
+    post(`/api/damage-reports/${id}/review`, { decision, role, ...options }),
+  photos: () => get('/api/photos'),
+  photoImageUrl: (id) => `/api/photos/${id}/image${session.pin() ? `?pin=${encodeURIComponent(session.pin())}` : ''}`,
+  // inspection
+  inspections: () => get('/api/inspections'),
+  releaseDeposit: (rentalId, role) => post(`/api/rentals/${rentalId}/release-deposit`, { role }),
+  withhold: (rentalId, body) => post(`/api/rentals/${rentalId}/withhold`, body),
+  // owner
+  repairFees: () => get('/api/repair-fees'),
+  saveRepairFees: (zones) => put('/api/repair-fees', zones),
+  qrCodes: () => get('/api/qr-codes'),
   // passport
   passport: (board) => get(`/api/boards/${encodeURIComponent(board)}/passport`),
   // operator

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
+import { useT } from '../i18n.jsx'
 
 export function Logo({ small = false }) {
   return (
@@ -52,9 +53,13 @@ export function ErrorNote({ error }) {
   )
 }
 
+const LOCALES = { fr: 'fr-FR', en: 'en-GB', es: 'es-ES' }
+
 export function Money({ cents }) {
-  const v = (Number(cents || 0) / 100).toFixed(2).replace('.', ',')
-  return <span className="tabular-nums">{v} €</span>
+  const { lang } = useT()
+  const text = new Intl.NumberFormat(LOCALES[lang] || 'fr-FR', { style: 'currency', currency: 'EUR' })
+    .format(Number(cents || 0) / 100)
+  return <span className="tabular-nums">{text}</span>
 }
 
 export function formatDuration(seconds) {
@@ -83,9 +88,10 @@ export function StatusBadge({ status, label }) {
 }
 
 export function TxLink({ hash, url }) {
-  if (!hash) return <span className="text-xs text-ocean-700/60">en attente d'écriture</span>
+  const { t } = useT()
+  if (!hash) return <span className="text-xs text-ocean-700/60">{t('pending_write')}</span>
   const short = `${hash.slice(0, 8)}…${hash.slice(-4)}`
-  if (!url) return <span className="font-mono text-xs text-ocean-700/70" title="Simulation : aucune transaction réelle">{short} (simulation)</span>
+  if (!url) return <span className="font-mono text-xs text-ocean-700/70" title="Simulation">{short} ({t('simulation')})</span>
   return (
     <a href={url} target="_blank" rel="noreferrer" className="font-mono text-xs text-ocean-500 underline decoration-dotted">
       {short} ↗
@@ -126,6 +132,7 @@ export function usePoll(loader, ms = 2000, deps = []) {
 }
 
 export function SmsInbox({ phone }) {
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const { data } = usePoll(() => (phone ? api.sms(phone) : Promise.resolve([])), 2000, [phone])
   const count = data ? data.length : 0
@@ -135,10 +142,10 @@ export function SmsInbox({ phone }) {
       {open && (
         <Card className="mb-2 max-h-[60vh] overflow-y-auto">
           <div className="mb-2 flex items-center justify-between">
-            <div className="font-semibold">SMS reçus (démo)</div>
+            <div className="font-semibold">{t('sms_received')}</div>
             <span className="text-xs text-ocean-700/60">{phone}</span>
           </div>
-          {count === 0 && <p className="text-sm text-ocean-700/70">Aucun SMS pour l'instant.</p>}
+          {count === 0 && <p className="text-sm text-ocean-700/70">{t('sms_none')}</p>}
           <ul className="space-y-2">
             {(data || []).map((m) => (
               <li key={m.id} className="rounded-xl rounded-tl-sm bg-sand-100 px-3 py-2 text-sm">{m.text}</li>
@@ -150,7 +157,7 @@ export function SmsInbox({ phone }) {
         onClick={() => setOpen(!open)}
         className="ml-auto flex items-center gap-2 rounded-full bg-ocean-900 px-4 py-3 text-sm font-semibold text-white shadow-card"
       >
-        <span aria-hidden>✉</span> SMS de démo
+        <span aria-hidden>✉</span> {t('sms_demo')}
         {count > 0 && <span className="rounded-full bg-cork-400 px-2 text-xs">{count}</span>}
       </button>
     </div>
