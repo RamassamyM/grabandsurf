@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../api.js'
+import { api, isEmbedded } from '../api.js'
 import { useT } from '../i18n.jsx'
 
 export function Logo({ small = false }) {
@@ -136,9 +136,9 @@ export function SmsInbox({ phone }) {
   const [open, setOpen] = useState(false)
   const { data } = usePoll(() => (phone ? api.sms(phone) : Promise.resolve([])), 2000, [phone])
   const count = data ? data.length : 0
-  if (!phone) return null
+  if (!phone || isEmbedded()) return null  // inside the phone mockup, texts show in the Messages app
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-[calc(100%-2rem)] max-w-sm">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-40 w-[calc(100%-2rem)] max-w-sm [&>*]:pointer-events-auto">
       {open && (
         <Card className="mb-2 max-h-[60vh] overflow-y-auto">
           <div className="mb-2 flex items-center justify-between">
