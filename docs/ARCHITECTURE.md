@@ -134,7 +134,8 @@ SQLite dans `data/grabandsurf.db` (ou `DATABASE_URL`). **Montants en centimes (e
 | `partners`, `packs`, `pack_codes` | partenaire ; pack (heures, prix) ; codes (quota et minutes utilisées) |
 | `station_events` | station, board_id, type, t ; **unique (station, board_id, type, t)** = anti-doublon |
 | `alerts` | kind (theft, not_returned, station_offline, damage, unknown_board), board_id, station, message, resolved |
-| `sms_messages` | phone, text, t (boîte SMS de démo) |
+| `sms_messages` | phone, text, t, status (demo, queued, sent, failed), provider_id, error |
+| `sponsorships`, `sponsor_media` | Parrainage d'une planche (noms publics, design, dates, statut) et sa galerie |
 | `chain_txs` | board_id, rental_id, event_type, station, t, tx_hash, status |
 
 **Statuts de planche** : `at_rack`, `at_sea`, `away_from_home`, `unauthorized` (sortie sans client), `not_returned`, `workshop`, `lost`, `sold`.
@@ -168,7 +169,15 @@ La doc interactive est sur `http://localhost:9000/docs` : **c'est le contrat ent
 | `POST /api/rentals/{id}/withhold` | Retenir un forfait `{role, zone, severity, fee_cents?, send_to_workshop?}` |
 | `GET /api/repair-fees`, `PUT /api/repair-fees` | Grille des forfaits du propriétaire |
 | `GET /api/qr-codes` | Racks et planches à imprimer en QR |
-| `GET /api/boards/{id}/passport` | Carnet de vie, minutes surfées, réparations, preuves, ambassadeur |
+| `GET /api/boards/{id}/passport` | Carnet de vie lu sur la chaîne et relié à la base (statut par ligne), parrainage actif, ambassadeur |
+| `POST /api/boards/{id}/views` | Compteur anonyme d'ouvertures du passeport (chiffres du sponsor) |
+| `POST /api/boards/{id}/corrections` | Exploitant : faux départ corrigé `{role, reason}` (CORRECTION on-chain) |
+| `POST /api/partners/{id}/sponsorships`, `GET` idem | Partenaire : proposer un parrainage (design, noms publics, dates, médias) |
+| `GET /api/sponsorships` | Propriétaire : tous les parrainages avec leurs chiffres |
+| `POST /api/sponsorships/{id}/review` | Propriétaire : `{decision: approve|reject, role}` (SPONSORING on-chain) |
+| `POST /api/sponsorships/{id}/end` | Terminer un parrainage (FIN_SPONSORING) |
+| `GET /api/sponsorships/{id}/design`, `GET /api/sponsor-media/{id}` | Design et galerie (publics) |
+| `GET /api/claims/{token}`, `POST` idem | Achat implicite : recevoir le NFT `{wallet}` (VENDUE, `sellTo` en V2) |
 | `GET /api/fleet` | Exploitant : planches, stations, alertes, missions, CA, locations, blockchain |
 | `GET /api/missions`, `GET /api/chain` | Les 3 missions ; état de la blockchain |
 | `POST /api/boards/{id}/confirm-loss` | Exploitant : perte confirmée `{role}` → achat implicite |

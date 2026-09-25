@@ -12,7 +12,7 @@ from ..deps import get_db, get_services, get_settings, require_operator
 from ..domain import fleet, missions, pricing
 from ..domain.pricing import format_eur
 from ..models import Alert, Board, CardHold, ChainTx, DamageReport, Inspection, Rental, Station
-from ..schemas import RoleRequest
+from ..schemas import CorrectionRequest, RoleRequest
 from ..services import Services
 from ..settings import Settings
 from ..workflows import board_dict, clock, phone_of, record_chain, resolve_alerts, sms_to
@@ -67,6 +67,7 @@ def fleet_view(db: Session = Depends(get_db), services: Services = Depends(get_s
         "rentals": [{"id": r.id, "board_id": r.board_id, "status": r.status,
                      "duration_s": (r.end_t or now) - (r.start_t or now), "charged_cents": r.charged_cents,
                      "return_mode": r.return_mode} for r in rentals],
+        "sms": {"mode": services.sms.mode, "label": services.sms.label, "reason": services.sms.reason},
         "chain": dict(services.chain.status(),
                       txs=[{"id": t.id, "board_id": t.board_id, "event_type": t.event_type, "station": t.station,
                             "t": t.t, "status": t.status, "tx_hash": t.tx_hash,
@@ -113,7 +114,10 @@ def confirm_loss(board_id: str, body: RoleRequest, db: Session = Depends(get_db)
         rental.status, rental.charged_cents, rental.end_t = "bought", amount, now
         rental.deposit_status, rental.checked_role = "bought", body.role
         board.status = "sold"
-        sms_to(db, services, rental.customer_id, "sms_bought", now, board=board.id, amount=format_eur(amount))
+        from .claims import claim_token
+        base = settings.env.get("PUBLIC_BASE_URL", "").rstrip("/")
+        sms_to(db, services, rental.customer_id, "sms_bought", now, board=board.id, amount=format_eur(amount),
+               link="%s/claim/%s" % (base, claim_token(settings, rental.id)))
     else:
         board.status = "lost"
     board.status_t, board.current_station = now, None
@@ -121,6 +125,44 @@ def confirm_loss(board_id: str, body: RoleRequest, db: Session = Depends(get_db)
     db.add(Inspection(board_id=board.id, kind="loss_confirmed", role=body.role, t=now))
     record_chain(db, board.id, "PERDUE", board.home_station, now, rental.id if rental else None)
     return board_dict(board)
+
+
+@router.post("/boards/{board_id}/corrections")
+def correct_false_departure(board_id: str, body: CorrectionRequest, db: Session = Depends(get_db),
+                            services: Services = Depends(get_services)) -> dict[str, Any]:
+    """False departure (wet body in front of the beacon, board on the sand): corrected, never erased."""
+    board = db.get(Board, board_id)
+    if board is None:
+        raise HTTPException(404, "Planche inconnue.")
+    if board.status != "unauthorized":
+        raise HTTPException(400, "Seule une sortie sans client peut être corrigée ici.")
+    target = db.scalars(select(ChainTx).where(ChainTx.board_id == board.id, ChainTx.event_type == "DEPART")
+                        .order_by(ChainTx.id.desc())).first()
+    if target is None:
+        raise HTTPException(400, "Aucun départ à corriger.")
+    now = clock(db)
+    index = _chain_index(db, services, target)
+    station = board.home_station if not board.current_station else board.current_station
+    board.status, board.current_station, board.status_t = "at_rack", station, now
+    board.rentals_count = max(0, board.rentals_count - 1)
+    resolve_alerts(db, board.id, ("theft",))
+    db.add(Inspection(board_id=board.id, kind="correction", role=body.role, t=now))
+    record_chain(db, board.id, "CORRECTION", station, now, note=body.reason,
+                 extra={"corrected_index": index, "reason": body.reason})
+    return board_dict(board)
+
+
+def _chain_index(db: Session, services: Services, target: ChainTx) -> int:
+    """On-chain index of an event: from the history when available, else counted (mint is index 0)."""
+    history = services.chain.board_history(target.board_id)
+    if history and target.tx_hash:
+        for ev in history["events"]:
+            if ev["tx"].lower() == target.tx_hash.lower() and ev["type"] == target.event_type:
+                return ev["index"]
+    before = db.scalar(select(func.count(ChainTx.id)).where(
+        ChainTx.board_id == target.board_id, ChainTx.id < target.id,
+        ChainTx.status.in_(("sent", "pending")), ChainTx.event_type.notin_(("SPONSORING", "FIN_SPONSORING"))))
+    return int(before or 0) + 1
 
 
 @router.post("/boards/{board_id}/back-in-service")

@@ -68,3 +68,9 @@ class RoleRequest(BaseModel):
 class PackRequest(BaseModel):
     hours: int = Field(ge=1, le=10000)
     codes: int = Field(default=5, ge=1, le=500)
+
+
+class CorrectionRequest(BaseModel):
+    role: str = Field(default="exploitant", min_length=2, max_length=24)
+    reason: str = Field(default="faux départ : balise masquée", min_length=3, max_length=120,
+                        pattern=r'^[^"\\\x00-\x1f]+$')

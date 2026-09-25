@@ -13,11 +13,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select, update
 
-from .api import customers, fleet, inspections, owner, partners, passport, photos, rentals, stations
+from .api import (claims, customers, fleet, inspections, owner, partners, passport, photos, rentals,
+                  sponsorships, stations)
 from .i18n import request_lang, t
 from .db import create_tables, make_engine, make_sessionmaker
 from .models import Board, ChainTx
-from .services import Alarm, ChainService, DemoSms, FakePayment, Services
+from .services import Alarm, ChainService, FakePayment, Services
+from .services.sms import build_sms
 from .services.photo_ai import build_photo_ai
 from .settings import Settings, load_settings
 
@@ -26,7 +28,7 @@ log = logging.getLogger(__name__)
 
 def build_services(settings: Settings) -> Services:
     """Real or fake versions, chosen by the settings."""
-    return Services(sms=DemoSms(), payment=FakePayment(),
+    return Services(sms=build_sms(settings.env), payment=FakePayment(),
                     photo_ai=build_photo_ai(settings.env.get("PHOTO_AI", "auto"), settings.env, settings.config),
                     alarm=Alarm(sound=settings.alarm_sound),
                     chain=ChainService(settings.chain_mode, settings.env, settings.data_dir))
@@ -56,7 +58,14 @@ def create_app(settings: Optional[Settings] = None, services: Optional[Services]
             db.execute(update(ChainTx).where(ChainTx.id.in_(refs)).values(status="rejected"))
             db.commit()
 
+    def on_skipped(refs: list[int], reason: str) -> None:
+        with sessionmaker() as db:
+            db.execute(update(ChainTx).where(ChainTx.id.in_(refs)).values(status="skipped", note=reason[:120]))
+            db.commit()
+
     services.chain.on_sent, services.chain.on_rejected = on_sent, on_rejected
+    services.chain.on_skipped = on_skipped
+    services.sms.sessionmaker = sessionmaker
 
     app = FastAPI(title="Grab&Surf", version="1.0",
                   description="Location de planches en liège sans personne sur place.")
@@ -70,7 +79,8 @@ def create_app(settings: Optional[Settings] = None, services: Optional[Services]
         lang = request_lang(request.headers.get("x-lang", ""), request.headers.get("accept-language", ""))
         return JSONResponse({"detail": t("invalid_request", lang, field=field or "format")}, status_code=400)
 
-    for module in (stations, customers, rentals, partners, fleet, photos, passport, owner, inspections):
+    for module in (stations, customers, rentals, partners, fleet, photos, passport, owner, inspections,
+                   sponsorships, claims):
         app.include_router(module.router)
 
     dist = settings.frontend_dist

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { api } from '../../api.js'
 import { Button, Card, ErrorNote, Money, Spinner, usePoll } from '../../components/ui.jsx'
-import { StaffHeader } from '../operator/OperatorPage.jsx'
+import { PinGate, StaffHeader, useRole } from '../operator/OperatorPage.jsx'
+import { SponsorRow } from '../partner/PartnerPage.jsx'
 
 const URL_KEY = 'gs_qr_base_url'
 
@@ -14,14 +15,16 @@ export default function OwnerPage() {
       <StaffHeader active="owner" />
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
         <div className="flex gap-2 print:hidden">
-          {[['qr', 'QR à imprimer'], ['fees', 'Forfaits de réparation']].map(([id, label]) => (
+          {[['qr', 'QR à imprimer'], ['fees', 'Forfaits de réparation'], ['sponsoring', 'Parrainages']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === id ? 'bg-ocean-500 text-white' : 'bg-white text-ocean-700'}`}>
               {label}
             </button>
           ))}
         </div>
-        {tab === 'qr' ? <QrSheet /> : <RepairFees />}
+        {tab === 'qr' && <QrSheet />}
+        {tab === 'fees' && <RepairFees />}
+        {tab === 'sponsoring' && <SponsorReview />}
       </main>
     </div>
   )
@@ -144,6 +147,63 @@ function RepairFees() {
       <div className="mt-3"><ErrorNote error={err} /></div>
       {msg && <p className="mt-2 text-sm font-semibold text-ocean-500">{msg}</p>}
       <Button className="mt-3" busy={busy} onClick={save}>Enregistrer la grille</Button>
+    </Card>
+  )
+}
+
+// The owner approves a sponsorship before the design and the public names go on-chain.
+function SponsorReview() {
+  const { data, error, reload } = usePoll(() => api.sponsorships(), 4000, [])
+  const [role] = useRole()
+  const [err, setErr] = useState(null)
+  const [busy, setBusy] = useState(null)
+  if (error && error.status === 401) return <PinGate onSaved={reload} />
+  if (error) return <ErrorNote error={error.message} />
+  if (!data) return <Spinner />
+  const act = async (id, fn) => {
+    setBusy(id); setErr(null)
+    try { await fn(); await reload() } catch (e) { setErr(e.message) }
+    setBusy(null)
+  }
+  const groups = [['pending', 'À valider'], ['active', 'Actifs'], ['ended', 'Terminés ou refusés']]
+  return (
+    <Card>
+      <h2 className="font-display text-xl font-semibold">Parrainages</h2>
+      <p className="mt-1 text-sm text-ocean-700">
+        Valider inscrit sur la chaîne le nom public du sponsor et de l'artiste, l'empreinte et le lien du design, et les dates.
+        Le design devient l'image du NFT. Un nouveau parrainage termine le précédent sur la même planche.
+      </p>
+      <ErrorNote error={err} />
+      {groups.map(([key, label]) => {
+        const rows = data.filter((sp) => (key === 'ended' ? ['ended', 'rejected'].includes(sp.status) : sp.status === key))
+        if (!rows.length) return null
+        return (
+          <section key={key} className="mt-4">
+            <h3 className="font-semibold">{label}</h3>
+            <ul className="mt-2 space-y-2">
+              {rows.map((sp) => (
+                <SponsorRow key={sp.id} sp={sp}>
+                  {sp.status === 'pending' && (
+                    <div className="mt-2 flex gap-2">
+                      <Button className="min-h-0 px-3 py-1 text-xs" busy={busy === sp.id}
+                        onClick={() => act(sp.id, () => api.reviewSponsorship(sp.id, 'approve', role))}>Valider</Button>
+                      <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs"
+                        onClick={() => act(sp.id, () => api.reviewSponsorship(sp.id, 'reject', role))}>Refuser</Button>
+                    </div>
+                  )}
+                  {sp.status === 'active' && (
+                    <Button variant="ghost" className="mt-2 min-h-0 px-3 py-1 text-xs"
+                      onClick={() => window.confirm(`Terminer le parrainage de ${sp.board_id} ?`) && act(sp.id, () => api.endSponsorship(sp.id))}>
+                      Terminer
+                    </Button>
+                  )}
+                </SponsorRow>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
+      {!data.length && <p className="mt-3 text-sm text-ocean-700/70">Aucune demande de parrainage.</p>}
     </Card>
   )
 }

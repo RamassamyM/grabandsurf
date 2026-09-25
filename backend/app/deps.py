@@ -24,20 +24,26 @@ def get_services(request: Request) -> Services:
 
 
 def get_db(request: Request) -> Iterator[Session]:
-    """One session per request: commit on success, then send queued chain events."""
+    """One session per request: commit on success, then send what was queued (chain events, real SMS)."""
     db: Session = request.app.state.sessionmaker()
+    committed = False
     try:
         yield db
         db.commit()
+        committed = True
     except Exception:
         db.rollback()
         raise
     finally:
-        pending = db.info.pop("chain_pending", [])
+        chain_pending = db.info.pop("chain_pending", [])
+        sms_pending = db.info.pop("sms_pending", [])
         db.close()
-        chain = request.app.state.services.chain
-        for args in pending:
-            chain.publish(*args)
+        if committed:
+            services = request.app.state.services
+            for args in chain_pending:
+                services.chain.publish(*args)
+            for args in sms_pending:
+                services.sms.dispatch(*args)
 
 
 def sign_customer(settings: Settings, customer_id: int) -> str:

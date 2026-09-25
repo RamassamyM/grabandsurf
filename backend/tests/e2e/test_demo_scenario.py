@@ -142,8 +142,11 @@ class DemoScenarioTest(unittest.TestCase):
         p = c.get("/api/boards/korko-01/passport").json()
         self.assertEqual(p["sessions"], 1)
         self.assertEqual(p["minutes_surfed"], 12)
-        self.assertEqual([h["event_type"] for h in p["history"]], ["RETOUR", "DEPART"])
+        self.assertEqual([h["event_type"] for h in p["history"]], ["INSPECTION", "RETOUR", "DEPART"])
         self.assertTrue(all(h["tx_hash"].startswith("0x") for h in p["history"]))
+        # the photo stays private: only its fingerprint is public, anchored once
+        self.assertEqual(p["history"][0]["details"]["photo_sha256"], photo["sha256"])
+        self.assertNotIn("path", str(p))
         self.assertEqual(p["ambassador"]["name"], "Maïa")
         self.assertEqual(p["chain"]["label"], "Simulation")
 
@@ -171,7 +174,7 @@ class DemoScenarioTest(unittest.TestCase):
         m = c.get("/api/partners/maif/dashboard").json()
         self.assertEqual(m["minutes_used"], 12)
         self.assertEqual((m["sessions_count"], m["people_count"]), (1, 1))
-        self.assertEqual(len(m["sessions"][0]["proofs"]), 2)
+        self.assertEqual([x["event_type"] for x in m["sessions"][0]["proofs"]], ["DEPART", "RETOUR", "INSPECTION"])
         self.assertNotIn("+336", str(m))
         self.assertIn("intégrité vérifiable", m["statement"])
 
@@ -343,6 +346,89 @@ class DemoScenarioTest(unittest.TestCase):
         sms = c.get("/api/sms", params={"phone": "+34600000000"}).json()
         self.assertTrue(sms[0]["text"].startswith("¡Adelante con korko-01!"))
         self.assertTrue(sms[-1]["text"].startswith("Grab&Surf: tu código"))
+
+    def test_real_sms_still_shown_in_demo_inbox(self):
+        from backend.tests.unit.test_sms import FakeTransport
+        from backend.app.services.sms import SmsService
+        transport = FakeTransport()
+        sms = SmsService("twilio", transport, run=lambda job: job())
+        sms.sessionmaker = self.client.app.state.sessionmaker
+        self.services.sms = sms
+        self.demo.sign_up("+33612121212")
+        inbox = self.client.get("/api/sms", params={"phone": "+33612121212"}).json()
+        self.assertEqual((inbox[0]["status"], len(transport.sent)), ("sent", 1))
+        self.assertTrue(transport.sent[0][1].startswith("Grab&Surf : ton code est"))
+        transport.fail = "Twilio 21608 : unverified number"
+        self.client.post("/api/otp", json={"phone": "+33612121212"})
+        inbox = self.client.get("/api/sms", params={"phone": "+33612121212"}).json()
+        self.assertEqual(inbox[0]["status"], "failed")
+        self.assertIn("21608", inbox[0]["error"])
+
+    PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
+
+    def test_sponsorship_flow(self):
+        c = self.client
+        body = {"board_id": "korko-03", "sponsor_name": "Surf Shop Anglet", "sponsor_url": "https://surfshop.example",
+                "message": "Fiers de soutenir le surf en liège.", "artist_name": "Lea Mar",
+                "artist_bio": "Peintre de vagues, Biarritz.", "start_date": "2026-10-01", "end_date": "2027-03-31",
+                "design_base64": self.PNG,
+                "media": [{"kind": "image", "image_base64": self.PNG, "caption": "Atelier"},
+                          {"kind": "video", "url": "https://vimeo.com/123", "caption": "Making of"}]}
+        bad = dict(body, sponsor_name='Surf "Shop"')
+        self.assertEqual(c.post("/api/partners/maif/sponsorships", json=bad).status_code, 400)
+        self.assertEqual(c.post("/api/partners/maif/sponsorships", json=dict(body, end_date="2020-01-01")).status_code, 400)
+        sp = c.post("/api/partners/maif/sponsorships", json=body).json()
+        self.assertEqual(sp["status"], "pending")
+        self.assertIsNone(c.get("/api/boards/korko-03/passport").json()["sponsorship"])  # not before approval
+        self.assertEqual(c.get("/api/sponsorships").json()[0]["status"], "pending")
+        out = c.post("/api/sponsorships/%d/review" % sp["id"], json={"decision": "approve", "role": "proprietaire"}).json()
+        self.assertEqual((out["status"], out["chain"]["status"]), ("active", "pending"))  # sent after commit
+        self.assertEqual(c.get("/api/sponsorships").json()[0]["chain"]["status"], "sent")
+        c.post("/api/boards/korko-03/views")
+        p = c.get("/api/boards/korko-03/passport").json()
+        self.assertEqual((p["sponsorship"]["artist_name"], len(p["sponsorship"]["media"])), ("Lea Mar", 2))
+        self.assertEqual(p["history"][0]["event_type"], "SPONSORING")
+        self.assertEqual(c.get(p["sponsorship"]["design_url"]).headers["content-type"], "image/png")
+        stats = c.get("/api/partners/maif/sponsorships").json()[0]["stats"]
+        self.assertEqual(stats["passport_views"], 1)
+        # a new approved sponsorship ends the previous one, on-chain too
+        sp2 = c.post("/api/partners/maif/sponsorships", json=dict(body, artist_name="Nino")).json()
+        c.post("/api/sponsorships/%d/review" % sp2["id"], json={"decision": "approve"})
+        statuses = {s["id"]: s["status"] for s in c.get("/api/sponsorships").json()}
+        self.assertEqual((statuses[sp["id"]], statuses[sp2["id"]]), ("ended", "active"))
+        types = [h["event_type"] for h in c.get("/api/boards/korko-03/passport").json()["history"]]
+        self.assertEqual(types[:3], ["SPONSORING", "FIN_SPONSORING", "SPONSORING"])
+
+    def test_claim_nft_after_implicit_purchase(self):
+        c, d = self.client, self.demo
+        d.event(0, "TIC")
+        h = d.sign_up("+33633330000")
+        c.post("/api/rentals", json={"station": "A"}, headers=h)
+        d.event(10, "DEPART", "korko-01")
+        d.event(10 + 1800, "TIC")
+        c.post("/api/boards/korko-01/confirm-loss", json={"role": "tournee"})
+        sms = c.get("/api/sms", params={"phone": "+33633330000"}).json()[0]["text"]
+        token = sms.split("/claim/")[1].strip()
+        self.assertEqual(c.get("/api/claims/%s" % token).json()["board_id"], "korko-01")
+        self.assertEqual(c.get("/api/claims/1-forged").status_code, 404)
+        self.assertEqual(c.post("/api/claims/%s" % token, json={"wallet": "0x123"}).status_code, 400)
+        wallet = "0x" + "ab" * 20
+        out = c.post("/api/claims/%s" % token, json={"wallet": wallet}).json()
+        self.assertEqual(out["wallet"], wallet)
+        self.assertEqual(c.get("/api/claims/%s" % token).json()["chain_status"], "sent")
+        self.assertEqual(c.post("/api/claims/%s" % token, json={"wallet": wallet}).status_code, 400)
+        self.assertEqual(c.get("/api/boards/korko-01/passport").json()["history"][0]["event_type"], "VENDUE")
+
+    def test_false_departure_corrected_not_erased(self):
+        c, d = self.client, self.demo
+        d.event(10, "DEPART", "korko-02")  # nobody rented: alarm
+        self.assertEqual(c.post("/api/boards/korko-01/corrections", json={}).status_code, 400)
+        out = c.post("/api/boards/korko-02/corrections", json={"role": "exploitant", "reason": "corps devant la balise"}).json()
+        self.assertEqual((out["status"], out["current_station"]), ("at_rack", "A"))
+        self.assertFalse(any(a["kind"] == "theft" for a in c.get("/api/fleet").json()["alerts"]))
+        history = c.get("/api/boards/korko-02/passport").json()["history"]
+        self.assertEqual([h["event_type"] for h in history], ["CORRECTION", "DEPART"])
+        self.assertEqual(history[0]["details"]["reason"], "corps devant la balise")
 
     def test_errors_are_clear_not_500(self):
         c = self.client

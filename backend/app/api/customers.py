@@ -147,6 +147,6 @@ def sms_inbox(phone: str, db: Session = Depends(get_db),
     phone = normalize_phone(phone)
     rows = db.scalars(select(SmsMessage).where(SmsMessage.phone == phone)
                       .order_by(SmsMessage.id.desc()).limit(30))
-    return [{"id": m.id, "text": m.text, "t": m.t} for m in rows]
+    return [{"id": m.id, "text": m.text, "t": m.t, "status": m.status, "error": m.error} for m in rows]
 
 

@@ -8,12 +8,12 @@ from .alarm import Alarm
 from .chain import ChainService
 from .payment import FakePayment
 from .photo_ai import FakePhotoAI
-from .sms import DemoSms
+from .sms import SmsService
 
 
 @dataclass
 class Services:
-    sms: DemoSms
+    sms: SmsService
     payment: FakePayment
     photo_ai: FakePhotoAI
     alarm: Alarm

@@ -207,6 +207,15 @@ function Boards({ boards, role, reload }) {
                   Confirmer la perte
                 </Button>
               )}
+              {b.status === 'unauthorized' && (
+                <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs"
+                  onClick={() => {
+                    const reason = window.prompt(`Faux départ de ${b.id} : la planche est bien au rack ? Motif (inscrit sur la chaîne, sans nom)`, 'Faux départ, planche vue au rack')
+                    if (reason) act(() => api.correctDeparture(b.id, role, reason.replace(/["\\]/g, '')))
+                  }}>
+                  Corriger (faux départ)
+                </Button>
+              )}
               {['workshop', 'lost', 'sold'].includes(b.status) && (
                 <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs" onClick={() => act(() => api.backInService(b.id, role))}>
                   Remettre en service
