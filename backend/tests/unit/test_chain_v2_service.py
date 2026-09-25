@@ -53,7 +53,7 @@ class ChainV2ServiceTest(unittest.TestCase):
         for e in events:
             self.chain.publish(*e)
         self.assertTrue(self.done.wait(30), "events not sent: %s" % self.sent)
-        self.assertEqual(len(self.sent[0][0]), 4)  # the plain life-log events went in one batch
+        self.assertEqual(sorted(r for refs, _ in self.sent for r in refs), list(range(1, len(events) + 1)))
 
     def test_publish_actions_and_read_history(self):
         self.assertEqual((self.chain.mode, self.chain.version), ("real", 2))
@@ -87,6 +87,16 @@ class ChainV2ServiceTest(unittest.TestCase):
         signed = self.chain.sign("ef" * 32)
         self.assertEqual(recover_signer("ef" * 32, signed["signature"]), signed["signer"])
         self.assertEqual(signed["signer"], self.chain.operator)
+
+
+class BatchingTest(unittest.TestCase):
+    def test_plain_events_batched_actions_alone(self):
+        chain = ChainService("fake", {}, Path(tempfile.mkdtemp()))
+        ev = lambda ref, kind: {"ref": ref, "type": kind}
+        chain.queue = [ev(1, "DEPART"), ev(2, "RETOUR"), ev(3, "INSPECTION"), ev(4, "CORRECTION"), ev(5, "DEPART")]
+        self.assertEqual([e["ref"] for e in chain._next_batch()], [1, 2, 3])
+        chain.queue = chain.queue[3:]
+        self.assertEqual([e["ref"] for e in chain._next_batch()], [4])
 
 
 class V1SkipTest(unittest.TestCase):
