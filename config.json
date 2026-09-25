@@ -9,7 +9,8 @@
     "reminder_after_s": 600,
     "not_returned_after_s": 1800,
     "station_offline_after_s": 60,
-    "otp_valid_s": 600
+    "otp_valid_s": 600,
+    "armed_valid_s": 300
   },
   "rewards": {
     "return_photo_cents": 100,
@@ -44,7 +45,7 @@
   "packs": {
     "MAIF-SURF": {
       "partner": "maif",
-      "minutes": 600
+      "hours": 10
     }
   },
   "packs_rules": {
@@ -56,5 +57,11 @@
     "rail": 3000,
     "shock": 5000,
     "other": 2000
+  },
+  "demo": {
+    "customer_phone": "+33600000001",
+    "pack_code": "MAIF-SURF",
+    "extra_pack_codes": 3,
+    "operator_phone": "05 59 00 00 00"
   }
 }

@@ -48,3 +48,10 @@ def not_returned(start_t: float, now_t: float, config: dict[str, Any]) -> bool:
 def implicit_purchase_cents(config: dict[str, Any]) -> int:
     """Amount captured once the operator has confirmed the loss (implicit purchase)."""
     return config["pricing"]["deposit_hold_cents"]
+
+
+def format_eur(cents: int) -> str:
+    """French money format: 2,40 €."""
+    sign = "-" if cents < 0 else ""
+    cents = abs(int(cents))
+    return "%s%d,%02d €" % (sign, cents // 100, cents % 100)

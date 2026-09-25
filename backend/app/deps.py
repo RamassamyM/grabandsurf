@@ -1,0 +1,72 @@
+"""FastAPI dependencies: database session, services, customer token, operator PIN."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+from typing import Iterator, Optional
+
+from fastapi import Depends, Header, HTTPException, Request
+from sqlalchemy.orm import Session
+
+from .models import Customer
+from .services import Services
+from .settings import Settings
+
+
+def get_settings(request: Request) -> Settings:
+    return request.app.state.settings
+
+
+def get_services(request: Request) -> Services:
+    return request.app.state.services
+
+
+def get_db(request: Request) -> Iterator[Session]:
+    """One session per request: commit on success, then send queued chain events."""
+    db: Session = request.app.state.sessionmaker()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        pending = db.info.pop("chain_pending", [])
+        db.close()
+        chain = request.app.state.services.chain
+        for args in pending:
+            chain.publish(*args)
+
+
+def sign_customer(settings: Settings, customer_id: int) -> str:
+    """Signed token kept by the browser after the SMS code."""
+    sig = hmac.new(settings.secret_key.encode(), str(customer_id).encode(), hashlib.sha256).hexdigest()[:32]
+    return "%d.%s" % (customer_id, sig)
+
+
+def customer_id_from_token(settings: Settings, token: str) -> Optional[int]:
+    try:
+        raw_id, _ = token.split(".", 1)
+        cid = int(raw_id)
+    except ValueError:
+        return None
+    return cid if hmac.compare_digest(sign_customer(settings, cid), token) else None
+
+
+def current_customer(authorization: str = Header(default=""), db: Session = Depends(get_db),
+                     settings: Settings = Depends(get_settings)) -> Customer:
+    """Customer from the Authorization: Bearer token."""
+    token = authorization.removeprefix("Bearer ").strip()
+    cid = customer_id_from_token(settings, token) if token else None
+    customer = db.get(Customer, cid) if cid else None
+    if customer is None:
+        raise HTTPException(401, "Session expirée : saisis de nouveau ton numéro.")
+    return customer
+
+
+def require_operator(x_operator_pin: str = Header(default=""),
+                     settings: Settings = Depends(get_settings)) -> None:
+    """Operator and partner pages: PIN only if OPERATOR_PIN is set in .env."""
+    if settings.operator_pin and not hmac.compare_digest(x_operator_pin, settings.operator_pin):
+        raise HTTPException(401, "Code PIN exploitant requis.")

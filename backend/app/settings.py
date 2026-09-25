@@ -84,7 +84,7 @@ def load_settings(**overrides: Any) -> Settings:
     """Build settings from config.json, .env and the environment; keyword overrides win."""
     env = merged_env()
     data_dir = Path(env.get("DATA_DIR", str(ROOT / "data")))
-    secret = env.get("SECRET_KEY", "")
+    secret = overrides.get("secret_key") or env.get("SECRET_KEY", "")
     if not secret:
         log.warning("SECRET_KEY missing from .env: using a development key")
         secret = "dev-only-secret"
