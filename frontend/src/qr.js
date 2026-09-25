@@ -1,9 +1,15 @@
 // QR codes: read what a printed Grab&Surf QR contains, and decode a QR from a photo or a camera frame.
 import jsQR from 'jsqr'
 
-// Printed QR codes hold URLs: https://host/s/A (rack) or https://host/p/korko-01 (board).
+// Printed QR codes hold URLs: https://host/s/A (rack), https://host/s/A?slot=2 (rack slot)
+// or https://host/p/korko-01 (board).
 export function parseQr(text) {
   const raw = String(text || '').trim()
+  const slot = raw.match(/\/s\/([a-z0-9]+)\?(?:.*&)?slot=(\d+)/i) || raw.match(/^([a-z0-9]+)-(\d+)$/i)
+  if (slot && !/^korko$/i.test(slot[1])) {
+    const station = slot[1].toUpperCase()
+    return { type: 'slot', id: `${station}-${Number(slot[2])}`, station }
+  }
   const board = raw.match(/\/p\/([a-z0-9-]+)/i) || raw.match(/^(korko-\d+)$/i)
   if (board) return { type: 'board', id: board[1].toLowerCase() }
   const rack = raw.match(/\/s\/([a-z0-9]+)/i)

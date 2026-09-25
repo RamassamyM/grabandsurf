@@ -62,7 +62,7 @@ function QrSheet() {
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            QR du rack : ouvre la location. QR de planche (gravé au laser) : passeport, retour de secours, photo et casse.
+            QR du rack : ouvre la location. QR d'emplacement : un par crochet, photographié au retour. QR de planche (gravé au laser) : passeport, retour de secours, photo et casse.
             La caméra du navigateur demande HTTPS (ou localhost) ; sinon le client prend le QR en photo.
           </p>
         </CardContent>
@@ -75,6 +75,17 @@ function QrSheet() {
           ))}
         </div>
       </section>
+      {data.slots?.length > 0 && (
+        <section className="print:break-before-page">
+          <h2 className="text-xl font-extrabold">Emplacements</h2>
+          <p className="mb-3 text-sm text-muted-foreground print:hidden">
+            Un QR par crochet du rack : au retour, le client photographie celui où il a raccroché la planche.
+          </p>
+          <div className="grid grid-cols-3 gap-4 sm:grid-cols-6 print:grid-cols-6">
+            {data.slots.map((s) => <QrCard key={s.id} url={clean + s.path} title={s.id} subtitle={`rack ${s.station}`} />)}
+          </div>
+        </section>
+      )}
       <section className="print:break-before-page">
         <h2 className="mb-3 text-xl font-extrabold">Planches</h2>
         <div className="grid grid-cols-3 gap-4 sm:grid-cols-6 print:grid-cols-6">

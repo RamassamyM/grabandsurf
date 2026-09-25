@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useT } from '@/i18n.jsx'
 import { cn } from '@/lib/utils'
-import { PhotoReturn } from '../client/StationPage.jsx'
+import { ReturnPhotos } from '../client/Receipts.jsx'
 
 const ZONES = ['nose', 'tail', 'rail', 'fin', 'deck']
 
@@ -63,7 +63,7 @@ export default function PassportPage() {
 
         {mine && mine.status !== 'armed' && <ReturnHere rental={mine} board={b.id} reload={me.reload} />}
         {!mine && lastMine && lastMine.status === 'returned' && !lastMine.photo_taken && (
-          <Card><CardContent className="pt-1"><PhotoReturn rental={lastMine} reload={me.reload} /></CardContent></Card>
+          <Card><CardContent className="pt-1"><ReturnPhotos rental={lastMine} reload={me.reload} /></CardContent></Card>
         )}
 
         {data.sponsorship && <SponsorCard sp={data.sponsorship} />}

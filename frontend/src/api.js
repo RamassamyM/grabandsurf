@@ -83,8 +83,9 @@ export const api = {
   manualReturn: (id, rackStation, boardQr) =>
     post(`/api/rentals/${id}/manual-return`, { rack_station: rackStation, board_qr: boardQr }),
   // photos and damage
-  uploadPhoto: (rentalId, boardQr, imageBase64, damageZone) =>
-    post('/api/photos', { rental_id: rentalId, board_qr: boardQr, image_base64: imageBase64, damage_zone: damageZone || null }),
+  // One of the 6 return shots: front, back, fins, board_qr, slot_qr, station_qr (qr: what was read on it).
+  uploadPhoto: (rentalId, shot, qr, imageBase64, damageZone) =>
+    post('/api/photos', { rental_id: rentalId, shot, qr: qr || null, image_base64: imageBase64, damage_zone: damageZone || null }),
   reportDamage: (boardId, zone) => post('/api/damage-reports', { board_id: boardId, zone }),
   reviewDamage: (id, decision, role, options = {}) =>
     post(`/api/damage-reports/${id}/review`, { decision, role, ...options }),

@@ -292,6 +292,7 @@ export function DamageReview({ report: d, role, reload }) {
 }
 
 const CONDITION = { good: 'bon état', worn: 'usée', damaged: 'abîmée', unclear: 'photo peu claire' }
+const SHOT_LABELS = { front: 'Devant', back: 'Derrière', fins: 'Ailerons', board_qr: 'QR planche', slot_qr: 'QR emplacement', station_qr: 'QR station' }
 
 export function PhotoDiagnosis({ photo, compact = false }) {
   const ai = photo.ai_result || {}
@@ -304,7 +305,8 @@ export function PhotoDiagnosis({ photo, compact = false }) {
       <div className="min-w-[220px] flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <strong className="font-mono">{photo.board_id}</strong>
-          <Badge variant={ai.engine === 'claude' ? 'navy' : 'muted'}>{ai.engine === 'claude' ? 'IA Claude' : 'simulation'}</Badge>
+          {ai.shot && <Badge variant="outline">{SHOT_LABELS[ai.shot] || ai.shot}{ai.qr_read ? ` · ${ai.qr_read}` : ''}</Badge>}
+          <Badge variant={ai.engine === 'claude' ? 'navy' : 'muted'}>{ai.engine === 'claude' ? 'IA Claude' : ai.engine === 'qr' ? 'QR vérifié' : 'simulation'}</Badge>
           <span className="text-xs text-muted-foreground">
             QR {ai.board_read || 'non lu'} · {CONDITION[ai.overall_condition] || ai.overall_condition} · confiance {Math.round((ai.confidence || 0) * 100)} %
           </span>

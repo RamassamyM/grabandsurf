@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import {
-  AlertTriangle, Camera, Check, CheckCircle2, CreditCard, Gift, Loader2, MessageSquareText, Phone, QrCode, Receipt as ReceiptIcon,
+  AlertTriangle, Camera, Check, CreditCard, Gift, Loader2, MessageSquareText, Phone, QrCode, Receipt as ReceiptIcon,
   Share2, Tag, Timer, Waves as WavesIcon,
 } from 'lucide-react'
 import { api, session } from '@/api.js'
 import QrScanner from '@/components/QrScanner.jsx'
 import { CustomerHeader } from '@/components/Layout.jsx'
 import {
-  ErrorNote, IconBubble, Money, Script, SmsInbox, Spinner, fileToBase64, formatDuration, usePoll,
+  ErrorNote, IconBubble, Money, Script, SmsInbox, Spinner, formatDuration, usePoll,
 } from '@/components/common.jsx'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useT } from '@/i18n.jsx'
 import { cn } from '@/lib/utils'
-import { decodeImageFile, parseQr } from '@/qr.js'
+import { ReceiptList, photosPending } from './Receipts.jsx'
 
 // Customer journey at a rack: sign up once, then rent in 2 gestures.
 export default function StationPage() {
@@ -235,7 +235,7 @@ function Rental({ station, me, reload, available }) {
     if (value === 'receipt') next.set('tab', 'receipt'); else next.delete('tab')
     return next
   }, { replace: true })
-  const missing = me.history.find((r) => r.status === 'returned' && r.receipt?.deposit_status === 'pending_check' && !r.photo_taken)
+  const missing = me.history.find(photosPending)
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
       <TabsList className="grid h-12 w-full grid-cols-2">
@@ -250,8 +250,7 @@ function Rental({ station, me, reload, available }) {
         <RentForm station={station} reload={reload} available={available} />
       </TabsContent>
       <TabsContent value="receipt" className="mt-0 space-y-4">
-        {missing && missing.id !== last.id && <Receipt rental={missing} reload={reload} />}
-        <Receipt rental={last} reload={reload} />
+        <ReceiptList history={me.history} reload={reload} />
         <ReferralCard me={me} station={station} />
       </TabsContent>
     </Tabs>
@@ -404,130 +403,6 @@ function ManualReturn({ rental, station, reload }) {
           onResult={(r) => { setScanning(false); setQr(r.id); submit(r.id) }} />
       )}
     </Card>
-  )
-}
-
-function Receipt({ rental, reload }) {
-  const { t } = useT()
-  const r = rental.receipt
-  const deposit = {
-    pending_check: t('deposit_pending'), released: t('deposit_released'),
-    charged: t('deposit_charged'), bought: t('deposit_bought'),
-  }[r.deposit_status] || t('deposit_pending')
-  const blocked = r.deposit_status === 'pending_check' && !rental.photo_taken
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center gap-3 space-y-0">
-        <IconBubble icon={CheckCircle2} tone="ocean" />
-        <div>
-          <CardTitle className="text-xl">{t('receipt_title')}</CardTitle>
-          <CardDescription>{t('receipt')} · <span className="font-mono">{rental.board_id}</span></CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <dl className="divide-y rounded-xl border text-sm">
-          <Row label={t('board')} value={<span className="font-mono">{rental.board_id}</span>} />
-          <Row label={t('duration')} value={r.duration_label} />
-          {r.pack_minutes > 0 && <Row label={t('pack_line')} value={`${r.pack_minutes} min`} />}
-          {r.wallet_used_cents > 0 && <Row label={t('wallet_line')} value={<>- <Money cents={r.wallet_used_cents} /></>} />}
-          <Row label={t('deposit')} value={blocked ? <span className="text-coral">{t('deposit_waiting_photo')}</span> : deposit} />
-          {rental.return_mode === 'manual' && <Row label={t('return_qr')} value={t('by_qr')} />}
-          <Row label={t('paid')} value={<span className="text-lg font-extrabold"><Money cents={r.charged_cents} /></span>} />
-        </dl>
-        <PhotoReturn rental={rental} reload={reload} />
-      </CardContent>
-    </Card>
-  )
-}
-
-function Row({ label, value }) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-      <dt className="text-muted-foreground">{label}</dt><dd className="text-right font-bold">{value}</dd>
-    </div>
-  )
-}
-
-// Return photo: the QR code is read on the phone from the photo itself, then the backend diagnoses it.
-export function PhotoReturn({ rental, reload }) {
-  const { t } = useT()
-  const [file, setFile] = useState(null)
-  const [preview, setPreview] = useState(null)
-  const [qr, setQr] = useState(null)       // null: not read yet, '': not readable, else the board read
-  const [result, setResult] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
-  const inputId = `photo-${rental.id}`
-
-  const choose = async (e) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    setFile(f); setResult(null); setError(null)
-    setPreview(URL.createObjectURL(f))
-    const text = await decodeImageFile(f)
-    const parsed = parseQr(text)
-    setQr(parsed && parsed.type === 'board' ? parsed.id.toLowerCase() : '')
-  }
-  const expected = (rental.board_id || '').toLowerCase()
-  const matches = Boolean(qr) && qr === expected
-  const send = async () => {
-    setBusy(true); setError(null)
-    try {
-      const img = file ? await fileToBase64(file) : ''
-      const r = await api.uploadPhoto(rental.id, qr, img)
-      setResult(r)
-      if (reload) await reload()
-    } catch (err) { setError(err.message) }
-    setBusy(false)
-  }
-  if (!result && (rental.photo_taken || rental.photo_credited)) {
-    return (
-      <p className="mt-4 flex items-center gap-2 rounded-xl bg-foam p-3 text-sm font-bold text-ocean-700">
-        <CheckCircle2 className="h-4 w-4 shrink-0" /> {t('photo_done')}
-      </p>
-    )
-  }
-  if (result) {
-    return (
-      <div className="mt-4 rounded-xl bg-foam p-3 text-sm">
-        <p className="font-bold text-ocean-700">{result.message}</p>
-        <p className="mt-1 text-muted-foreground">
-          {t('diagnosis')} : {result.damage_detected ? t('damage_found') : t('no_damage')}
-          {' · '}{t('footprint')} <span className="font-mono">{result.sha256.slice(0, 10)}…</span>
-        </p>
-      </div>
-    )
-  }
-  return (
-    <div className="mt-4 rounded-2xl border-2 border-dashed border-sun/60 bg-sun/5 p-4">
-      <div className="flex items-start gap-3">
-        <IconBubble icon={Camera} tone="sun" />
-        <div>
-          <p className="font-bold leading-snug">{t('photo_title')}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{t('photo_text')}</p>
-        </div>
-      </div>
-      <input id={inputId} type="file" accept="image/*" capture="environment" className="hidden" onChange={choose} />
-      {preview && <img src={preview} alt="" className="mt-3 max-h-48 w-full rounded-xl object-cover" />}
-      {matches && <p className="mt-2 flex items-center gap-1 text-sm font-bold text-ocean-700"><Check className="h-4 w-4" /> {t('qr_found', { board: qr })}</p>}
-      {qr && !matches && (
-        <p role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-coral-50 p-3 text-sm font-bold text-coral">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {t('qr_other_board', { qr, board: rental.board_id })}
-        </p>
-      )}
-      {qr === '' && <p role="alert" className="mt-2 rounded-xl bg-coral-50 p-3 text-sm text-coral">{t('qr_not_found')}</p>}
-      <ErrorNote error={error} className="mt-2" />
-      <div className="mt-3 grid gap-2">
-        <Button variant="outline" onClick={() => document.getElementById(inputId).click()}>
-          <Camera /> {file ? t('retake_photo') : t('take_photo')}
-        </Button>
-        {matches && (
-          <Button variant="sun" disabled={busy} onClick={send}>
-            {busy && <Loader2 className="animate-spin" />} {t('send_photo')}
-          </Button>
-        )}
-      </div>
-    </div>
   )
 }
 
