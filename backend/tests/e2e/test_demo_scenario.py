@@ -234,6 +234,11 @@ class DemoScenarioTest(unittest.TestCase):
         f = self.client.get("/api/fleet").json()
         self.assertFalse(any(a["kind"] == "station_offline" for a in f["alerts"]))
 
+    def test_real_station_epoch_time(self):
+        self.demo.event(1725873012.4, "TIC")
+        f = self.client.get("/api/fleet").json()
+        self.assertTrue(all(b["since_label"] == "0 min" for b in f["boards"]))
+
     def test_errors_are_clear_not_500(self):
         c = self.client
         self.assertEqual(c.post("/api/otp", json={"phone": "abc"}).status_code, 400)

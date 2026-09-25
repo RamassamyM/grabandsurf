@@ -172,7 +172,11 @@ def reward_sponsor(db: Session, services: Services, config: dict[str, Any], cust
 def process_event(db: Session, services: Services, config: dict[str, Any],
                   ev: fleet.StationEvent) -> dict[str, Any]:
     """Apply one station event. Returns {"duplicate": bool, "alarm": [board ids]}."""
+    first_event = get_clock(db) == 0
     now = advance_clock(db, ev.t)
+    if first_event:  # a real station speaks in epoch seconds: start the boards' clocks there
+        for b in db.scalars(select(Board).where(Board.status_t == 0)):
+            b.status_t = now
     station = db.get(Station, ev.station)
     if station is None:
         station = Station(id=ev.station, name=config["stations"].get(ev.station, {}).get("name", ev.station))
