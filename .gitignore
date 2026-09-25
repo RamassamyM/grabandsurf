@@ -1,4 +1,11 @@
 .env
+__pycache__/
+.venv/
+data/
+*.db
+node_modules/
+frontend/dist/
+.DS_Store
+# queue files left by the old prototype (korko_chain.py)
 chaine_file*.ndjson
 chaine_file*.ndjson.tmp
-__pycache__/

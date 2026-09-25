@@ -1,176 +1,154 @@
-# KORKO · équipe grabandsurf
+# Grab&Surf · équipe grabandsurf
 
-Hackathon SHAKA Festival (Biarritz), défi Green Wave : KORKO, la location de
-planches de surf en liège en libre-service. Pas de serrure, pas d'app : le
-compteur démarre quand la planche quitte le râtelier et s'arrête quand elle
-revient.
+Hackathon SHAKA Festival (Biarritz), défi Green Wave : KORKO, la location de planches de surf
+en liège sans personne sur place. Pas de serrure, pas d'appli : on scanne le QR du rack, on
+prend la planche indiquée, on la raccroche, c'est fini.
 
-Notre ajout : **chaque planche est un NFT sur Avalanche**, avec son carnet de vie
-on-chain (départs, retours, retours dans une autre station, pertes). L'usager ne
-voit jamais la blockchain : c'est le cloud qui écrit. Détails : [BLOCKCHAIN.md](BLOCKCHAIN.md).
+Notre ajout : **chaque planche est un NFT sur Avalanche**, avec son carnet de vie on-chain
+(départs, retours, réparations, pertes). L'usager ne voit jamais la blockchain : c'est le
+backend qui écrit.
 
-- Contrat (Avalanche Fuji, code vérifié) :
+- Contrat d'équipe (Avalanche Fuji, code vérifié) :
   [0x2E802fE90a880f2189A5a85C5562947D8a542302](https://testnet.snowtrace.io/address/0x2E802fE90a880f2189A5a85C5562947D8a542302)
+- À lire avant de coder : [CLAUDE.md](CLAUDE.md), [docs/BRIEF.md](docs/BRIEF.md),
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/BLOCKCHAIN.md](docs/BLOCKCHAIN.md).
 
-## Structure du dépôt
-
-```
-korko-kit/              kit fourni par les organisateurs : NE PAS MODIFIER
-  korko_sim.py          simulateur de station (radio BLE simulée)
-  station_exemple.py    code station d'exemple (Partie 1)
-  cloud_exemple.py      cloud d'exemple (Partie 2)
-  korko.py, korko_test.py
-cloud_app.py            NOTRE cloud (copie de cloud_exemple.py + blockchain)
-korko_chain.py          écriture on-chain en arrière-plan, file d'attente persistée
-chaine_cle.py           crée ton wallet opérateur dans .env
-chaine_operateur.py     le propriétaire du contrat autorise un wallet
-chaine_deployer.py      déploie ton contrat perso de dev
-chaine/                 contrat Solidity, ABI compilée, adresse du déploiement
-requirements-chaine.txt dépendances Python (côté cloud seulement)
-```
-
-## 1. Prérequis
-
-- Python 3.8 ou plus récent (3.10+ recommandé), `pip3`, `git`.
-- Le kit des organisateurs n'utilise que la bibliothèque standard. Seul
-  `cloud_app.py` a besoin de `web3` pour la partie blockchain.
-
-## 2. Installation
+## Structure
 
 ```
+backend/app/         FastAPI : domain/ (règles pures), services/ (SMS, paiement, IA, alarme, chain), api/
+backend/chain/       contrat, ABI, deployment.json (contrat d'équipe), scripts wallet et déploiement
+backend/scripts/     seed.py : données de démo
+backend/tests/       unit/ et e2e/ (le scénario de démo complet)
+station/station.py   code station : journal sur disque, reprise, alarme
+frontend/            React 18 + Vite + Tailwind : client, passeport, exploitant, partenaire
+config.json          tarifs, minuteries, cagnotte, packs (montants en centimes, aucun secret)
+korko-kit/           kit des organisateurs : NE PAS MODIFIER
+scripts/dev.sh       lance simulateur, backend, frontend et station
+data/                base SQLite, journaux, photos (ignoré par git)
+```
+
+## 1. Installation
+
+Prérequis : **Python 3.12**, **Node 20** ou plus récent, `git`.
+
+```
+# macOS
+brew install python@3.12 node
+
 git clone <url-du-depot> grabandsurf
 cd grabandsurf
-pip3 install -r requirements-chaine.txt
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+(cd frontend && npm install)
+cp env.example .env      # puis garde .env pour toi, il n'est jamais committé
 ```
 
-**Python 3.8 sur Mac** : si l'installation échoue sur `ckzg` avec
-« No developer tools were found », installe d'abord la version précompilée :
+Sans `.env`, tout fonctionne : la blockchain passe en **simulation** (transactions fictives,
+clairement signalées dans les écrans).
+
+## 2. Lancer la démo
+
+Tout d'un coup :
 
 ```
-pip3 install "ckzg==2.1.5"
-pip3 install -r requirements-chaine.txt
+scripts/dev.sh             # simulateur :8080, backend :9000, frontend :5173, station
+scripts/dev.sh --build     # le backend sert le front compilé sur :9000 (config de démo)
 ```
 
-(Autre solution : un Python 3.10 ou plus récent, où tout est précompilé.)
-
-## 3. Lancer la démo sans blockchain
-
-Tout se lance **depuis la racine du dépôt**, un terminal par commande :
+Ou un terminal par brique, depuis la racine :
 
 ```
-python3 korko-kit/korko_sim.py                              # simulateur   http://localhost:8080
-python3 cloud_app.py                                        # cloud        http://localhost:9000
-python3 korko-kit/station_exemple.py --source localhost:8420
+python3 korko-kit/korko_sim.py                                           # simulateur http://localhost:8080
+uvicorn backend.app.main:create_app --factory --port 9000                # backend, doc sur /docs
+(cd frontend && npm run dev)                                             # front http://localhost:5173
+python3 station/station.py --source localhost:8420                       # station A
 ```
 
-Sans wallet configuré, `cloud_app.py` affiche `blockchain en veille` et tout le
-reste fonctionne normalement.
+Pages :
 
-Vérifications :
-- le simulateur affiche « 1 client(s) branché(s) » ;
-- le tableau de bord du cloud montre la station A avec l'heure de son dernier message ;
-- armer un client : http://localhost:9000/arme?client=+33612&station=A puis faire
-  partir la planche proposée dans le simulateur.
+| Page | Adresse |
+| --- | --- |
+| Client au rack A | http://localhost:5173/s/A |
+| Passeport de la planche | http://localhost:5173/p/korko-01 |
+| Exploitant | http://localhost:5173/operator |
+| Partenaire MAIF | http://localhost:5173/partner/maif |
 
-Si le cloud affiche « Aucune station branchée », la commande station ne tourne
-pas, ou elle a été lancée sans `--source`.
+Scénario : inscription avec un numéro (le code SMS s'affiche en démo), carte fictive, code
+pack `MAIF-SURF`, « Prends korko-01 ». Dans le simulateur, fais partir korko-01 : le compteur
+démarre. Fais partir korko-02 sans louer : l'alarme sonne et l'exploitant est alerté.
+Raccroche korko-01 : reçu par SMS, photo de retour (+1 €), passeport, tableau MAIF.
+
+Remettre la démo à zéro : bouton en bas de la page exploitant, ou `python -m backend.scripts.seed`.
+
+## 3. Tests
+
+```
+python -m unittest discover -s backend/tests -t .
+```
+
+Tests unitaires du domaine, de la station et de la chaîne, plus
+`backend/tests/e2e/test_demo_scenario.py` qui rejoue toute la démo avec une base SQLite
+temporaire et des services factices. GitHub Actions lance les tests et le build du front à
+chaque PR.
 
 ## 4. Brancher la blockchain
 
-Deux sortes de contrats, sur le même réseau de test Avalanche Fuji :
-
 | | Contrat **perso** (dev) | Contrat **d'équipe** (démo) |
 |---|---|---|
-| À quoi il sert | tester, casser, redéployer sans gêner les autres | la démo devant le jury, code vérifié sur Snowtrace |
-| Où est son adresse | `KORKO_CONTRAT` dans ton `.env` (jamais committé) | `chaine/deploiement.json` (committé) |
-| Qui peut écrire | toi seul | le propriétaire et les wallets qu'il autorise |
-
-Le cloud prend ton contrat perso s'il existe, sinon celui de l'équipe. Le tableau
-de bord affiche lequel est utilisé (`PERSO · dev` ou `ÉQUIPE · démo`).
-
-### 4.1 Ton wallet et ton contrat perso
-
-1. **Crée ton wallet** (la clé reste sur ta machine, dans `.env`) :
-   ```
-   python3 chaine_cle.py
-   ```
-   Le script n'affiche que ton adresse publique `0x…`.
-
-2. **Récupère des AVAX de test** pour payer les frais (quasi nuls) :
-   https://core.app/tools/testnet-faucet/?subnet=c&token=c
-   Réseau Fuji C-Chain, token AVAX. Le faucet demande un peu d'AVAX sur le réseau
-   principal ou un code coupon (à demander à l'équipe Avalanche du hackathon).
-   Sinon, un coéquipier peut t'envoyer un peu d'AVAX de test.
-
-3. **Déploie ton contrat perso** :
-   ```
-   python3 chaine_deployer.py
-   ```
-   Son adresse va dans ton `.env`. Pas besoin de le vérifier sur Snowtrace.
-   Pour repartir d'un contrat neuf : `python3 chaine_deployer.py --force`.
-
-4. **Lance le cloud** : `python3 cloud_app.py` affiche
-   `blockchain active : contrat PERSO 0x…`. Chaque départ ou retour apparaît dans la
-   section BLOCKCHAIN du tableau de bord avec un lien Snowtrace.
-   Passeport d'une planche : http://localhost:9000/passeport?planche=korko-01
-
-### 4.2 Le contrat d'équipe (démo)
-
-Il est déjà déployé et vérifié :
-[0x2E802fE9…8a542302](https://testnet.snowtrace.io/address/0x2E802fE90a880f2189A5a85C5562947D8a542302).
-Pour y écrire, ton wallet doit être autorisé une fois par le propriétaire
-(Michael). Envoie-lui ton adresse publique ; il lance :
+| À quoi il sert | tester sans salir le carnet de la démo | la démo devant le jury |
+| Adresse | `CONTRACT_ADDRESS` dans ton `.env` | `backend/chain/deployment.json` |
+| Qui écrit | toi seul | le propriétaire et les wallets qu'il autorise |
 
 ```
-python3 chaine_operateur.py 0xTON_ADRESSE              # autoriser
-python3 chaine_operateur.py 0xTON_ADRESSE --verifier   # vérifier
+python -m backend.chain.scripts.create_wallet     # clé dans .env, affiche seulement l'adresse
+#   faucet Fuji : https://core.app/tools/testnet-faucet/?subnet=c&token=c
+python -m backend.chain.scripts.deploy            # ton contrat perso, adresse écrite dans .env
+uvicorn backend.app.main:create_app --factory --port 9000
 ```
 
-Puis, pour la démo, force le contrat d'équipe sans toucher à ton `.env` :
+Pour la démo sur le contrat d'équipe, ton wallet doit être autorisé par le propriétaire :
 
 ```
-KORKO_MODE=equipe python3 cloud_app.py
+python -m backend.chain.scripts.grant_operator 0xTON_ADRESSE            # autoriser (propriétaire)
+python -m backend.chain.scripts.grant_operator 0xTON_ADRESSE --check    # vérifier
+CHAIN_MODE=team uvicorn backend.app.main:create_app --factory --port 9000
 ```
 
-Chaque contrat a sa propre file d'attente (`chaine_file_<contrat>.ndjson`) : passer
-de l'un à l'autre ne mélange jamais les événements.
+Les anciens noms du `.env` restent acceptés : `KORKO_CLE_OPERATEUR`, `KORKO_CONTRAT`,
+`KORKO_MODE=equipe`, `KORKO_RPC`, `KORKO_CHAIN_ID`, `KORKO_EXPLORATEUR`.
+`CHAIN_MODE` : `auto` (défaut : réel si une clé existe, sinon simulation), `team`,
+`personal`, `fake`, `off`.
 
-Ne lance **pas** `chaine_deployer.py --equipe` : il remplacerait le contrat
-d'équipe dans `chaine/deploiement.json`.
+Ne lance **pas** `deploy --team` : il remplacerait le contrat d'équipe.
 
 ## 5. Sur la maquette réelle
 
-Connecté au Wi-Fi de la maquette (identifiants dans le brief des organisateurs),
-remplace le simulateur par une vraie station :
+Connecté au Wi-Fi de la maquette :
 
 ```
-python3 cloud_app.py
-python3 korko-kit/station_exemple.py --source 192.168.8.100:8420   # station A
+STATION_SOURCE=192.168.8.100:8420 scripts/dev.sh --build    # station A
 ```
 
-Station B : `192.168.8.101`, station C : `192.168.8.102`.
+Stations B et C : `192.168.8.101` et `192.168.8.102` (une commande `station/station.py` par station).
 
 ## Règles de l'équipe
 
-- **Jamais de clé privée** dans git, dans un message ou dans une conversation.
-  `.env` est dans `.gitignore`. Une clé fuitée se révoque avec
-  `python3 chaine_operateur.py 0xADRESSE --retirer`.
-- **Testnet uniquement**, avec un wallet créé pour le hackathon, jamais un wallet perso.
-- **Aucune donnée client on-chain** : ni téléphone, ni carte. Seulement planche,
-  station, type d'événement, heure.
-- **Ne jamais lire `time.time()`** dans la logique métier : on suit le champ `t`
-  du flux (règle du kit).
-- On ne modifie pas `korko-kit/` : on copie à la racine et on travaille sur la copie.
+- **Jamais de clé privée** dans git ou dans une conversation. `.env` est ignoré par git.
+- **Testnet uniquement**, avec un wallet créé pour le hackathon.
+- **Aucune donnée client on-chain** : seulement planche, station, type d'événement, heure.
+- **Jamais `time.time()`** dans la logique métier : l'heure vient du champ `t` du flux.
+- On ne modifie pas `korko-kit/`.
+- Aucun tiret cadratin dans les textes affichés (`python scripts/check_em_dash.py`).
 
 ## Dépannage
 
 | Symptôme | Cause et solution |
 |---|---|
-| `Failed building wheel for ckzg` | Python 3.8 sans outils Xcode : `pip3 install "ckzg==2.1.5"` puis réinstaller |
-| `blockchain en veille : web3 non installé` | `pip3 install -r requirements-chaine.txt` |
-| `pas de clé opérateur dans .env` | `python3 chaine_cle.py` |
-| `ton adresse … n'est pas opérateur` | contrat d'équipe : se faire autoriser (4.2), ou déployer ton contrat perso (4.1) |
-| Le tableau de bord dit `ÉQUIPE` alors que tu testes | tu n'as pas de contrat perso : `python3 chaine_deployer.py` |
-| `Solde nul` ou transactions en attente | passer au faucet (4.1, étape 2) |
-| `réseau : … (on réessaie)` dans le tableau de bord | coupure réseau : les événements attendent dans `chaine_file_<contrat>.ndjson` et partiront seuls |
-| `Address already in use` | un simulateur ou un cloud tourne déjà dans un autre terminal |
+| `blockchain : Simulation` alors que tu veux Fuji | pas de clé dans `.env` : `python -m backend.chain.scripts.create_wallet` |
+| `n'est pas opérateur du contrat` | se faire autoriser (section 4) ou déployer ton contrat perso |
+| Station « jamais vue » chez l'exploitant | `station/station.py` ne tourne pas, ou sans `--source` |
+| `Address already in use` | un simulateur ou un backend tourne déjà |
+| Événements en attente après une coupure | ils sont dans `data/station_A.ndjson` et partent seuls, dans l'ordre |
+| Page blanche sur :9000 | lancer `scripts/dev.sh --build` (ou `npm run build` dans `frontend/`) |

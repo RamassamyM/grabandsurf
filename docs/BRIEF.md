@@ -1,12 +1,12 @@
 # Grab&Surf : brief projet
 
-Sep 25, 2026 · Document de travail, à valider par l'équipe
+Sep 25, 2026 · Document de travail, décisions validées intégrées (priorités, non-retour, partenaire, offres Notox, pitch en 6 actes)
 
 ## En bref
 
 Grab&Surf (le service appelé KORKO dans le brief de Green Wave) loue des planches de surf en liège sans personne sur la plage : on scanne un QR, on prend la planche indiquée, on la raccroche, c'est fini. Notre équipe ajoute une idée centrale : **chaque planche a une mémoire infalsifiable**, son carnet de vie sur la blockchain Avalanche (départs, retours, casse, réparations, heures surfées).
 
-Cette mémoire sert trois usages concrets : dissuader le vol, trancher les litiges de caution avec la photo de retour, et prouver aux partenaires les heures de sport qu'ils financent. L'usager ne voit jamais la blockchain : pas de wallet, pas de signature, pas de frais.
+Cette mémoire sert trois usages concrets : dissuader le vol, trancher les litiges de caution avec la photo de retour, et garantir aux partenaires que chaque heure qu'ils financent est historisée et son intégrité vérifiable. **La blockchain est l'infrastructure, pas le produit.** L'usager ne voit jamais la blockchain : pas de wallet, pas de signature, pas de frais.
 
 **Phrase de pitch** : « Grab&Surf loue des planches sans personne sur la plage, et c'est la planche elle-même qui garde la preuve de tout ce qui s'est passé. »
 
@@ -46,10 +46,10 @@ Notre différence tient en une idée, **la planche qui se souvient**, déclinée
 | 1 | **Chaque planche est un NFT avec son carnet de vie on-chain** | Identité et historique infalsifiables. Déjà déployé et vérifié sur Avalanche Fuji. |
 | 2 | **La blockchain sans wallet** | L'usager ne signe rien et ne paie aucun frais : c'est le cloud qui écrit. On respecte la règle des 2 gestes du brief. |
 | 3 | **La photo de retour devient une preuve** | Son empreinte (hash) est inscrite sur la chaîne : personne ne peut prétendre qu'elle a été retouchée. Elle tranche les litiges de caution et rapporte 1 € au client. |
-| 4 | **Le vol converti en vente, pour de vrai** | Quand la location atteint le prix de la planche, elle est achetée : caution prélevée et **NFT transféré au client**. C'est le « script de conversion d'un vol en vente » demandé par la piste 3. |
-| 5 | **Des heures de surf offertes et certifiées** | Une entreprise, la MAIF ou une mairie achète un pack d'heures, distribue des codes, et suit l'usage prouvé on-chain pour son rapport RSE. |
+| 4 | **Le vol converti en vente, pour de vrai** | Une planche non rendue déclenche une alerte ; **après vérification par l'exploitant**, elle est achetée : caution prélevée et **NFT transférable au client**. Le seuil de non-retour est séparé du prix. C'est le « script de conversion d'un vol en vente » demandé par la piste 3. |
+| 5 | **Des heures de surf offertes et traçables** | Une entreprise, la MAIF ou une mairie achète un pack d'heures, distribue des codes, et suit un usage dont chaque heure est historisée et son intégrité vérifiable, pour son rapport RSE. |
 | 6 | **L'âme de la planche** | Le QR gravé ouvre son passeport public : histoire, ambassadeur, partage sur les réseaux. Une pub virale gratuite. |
-| 7 | **Un modèle Notox matériel + abonnement pour les écoles de surf** | Le prof reste dans l'eau avec ses élèves, les planches se louent seules. Le loueur local devient client au lieu d'être concurrent. |
+| 7 | **Un modèle Notox matériel + abonnement pour les écoles de surf** | Le prof reste dans l'eau avec ses élèves, les planches se louent seules. Le loueur local devient client au lieu d'être concurrent. Offre « parc durable financé » et rack mobile sur roulettes (voir « Les offres Notox »). |
 
 **Ce qui rend l'ensemble crédible** : tout reste simple et bon marché (un QR gravé au laser, un buzzer, un module horloge à quelques euros), et rien ne bloque la location si le réseau ou la blockchain tombent.
 
@@ -62,7 +62,7 @@ Le client utilise une page web mobile ouverte par QR code. Les trois autres acte
 | **Client** | Surfeur local ou touriste | Page web mobile (QR du rack et QR de la planche), SMS | S'inscrit une fois, loue en 2 gestes, rend la planche, prend la photo, signale une casse |
 | **Exploitant** | Qui fait la tournée : Notox ou une école de surf | Tableau de bord d'une page + SMS | Voit les stations en temps réel, reçoit les alertes, exécute 3 missions par jour, valide les diagnostics de casse |
 | **Propriétaire** | Notox / Green Wave | Vue parc (pitch, même tableau de bord pour la démo) | Suit tout le parc, prévoit réparations et remplacements, vend matériel et abonnement |
-| **Partenaire** | Entreprise, MAIF, mairie, comité d'entreprise | Tableau de bord partenaire | Achète un pack d'heures, distribue des codes, suit l'usage certifié on-chain |
+| **Partenaire** | Entreprise, MAIF, mairie, comité d'entreprise | Tableau de bord partenaire | Achète un pack d'heures, distribue des codes, suit un usage historisé et vérifiable, sans aucun nom |
 
 ### Parcours client
 
@@ -112,22 +112,33 @@ Les montants marqués « hypothèse » sont à fixer dans le back-office ; le co
 | Règle | Valeur | Source ou statut |
 | --- | --- | --- |
 | Tarif | 0,20 €/min, soit 12 €/h | Signalétique du brief |
-| Plafond | 3 h en réel, **10 min en démo** : SMS de rappel, puis forfait journée ou tarif majoré selon la décision de l'équipe, le compteur continue | Brief (« avec un plafond ») ; question ouverte, voir la fin du document |
+| Rappel | SMS de rappel après X (3 h en réel, **10 min en démo**), le compteur continue | Brief (« avec un plafond ») ; X dans `config.json` |
+| Forfait journée | 0,20 €/min jusqu'à **30 € par 24 h** ; le prix ne dépasse **jamais** la caution | Décision validée |
+| **Seuil de non-retour** | Après Y (30 min en démo) : statut « non rendue », alerte exploitant, SMS au client. **Aucun prélèvement à ce stade** : le seuil est séparé du prix | Décision validée ; Y dans `config.json` |
 | Caution | Empreinte bancaire de 300 € (« environ le prix d'une planche équipée »), jamais débitée sauf non-retour | Brief ; montant = hypothèse |
 | Paiement de la location | Prélevé au retour ; le reste de l'empreinte est libéré **sous 8 h au plus**, une fois l'état validé | Notre choix |
 | Validation de l'état | Photo de retour validée, OU location suivante sans signalement, OU inspection de la tournée | Notre choix |
 | Forfaits réparation | Retenus sur la caution selon une grille (aileron, nose, rail, choc) après validation par l'exploitant | Grille à fixer |
-| **Achat implicite** | Quand le montant cumulé de la location atteint le prix de la planche, elle est achetée : caution prélevée, **NFT transféré au client** | Notre règle ; exemple : avec un forfait journée de 30 €, 300 € sont atteints en 10 jours |
+| **Achat implicite** | Seulement après **vérification par l'exploitant** (tournée au rack ou retour par QR absent) : il confirme la perte, la caution de 300 € est prélevée, la planche passe « vendue » et son NFT peut être transféré au client | Décision validée : l'achat ne se déclenche jamais sur le seul compteur |
 | Garde-fou achat implicite | Aucun prélèvement de caution tant que la tournée n'a pas vérifié le rack, ou qu'il n'y a pas eu de retour par QR : une balise morte ressemble à un non-retour | Notre règle |
 | **Cagnotte photo** | 1 photo de retour = 1 € déduit de la prochaine session. 1 € par session maximum, seulement si le QR de la bonne planche est visible | Remplace les « tubes » du brief |
 | Interdit | Ne jamais récompenser le temps passé à l'eau | Brief : pousserait à monopoliser une planche |
 | **Pack d'heures** | Une organisation achète N heures (12 €/h moins une remise volume, hypothèse −20 %), reçoit des codes, chaque code donne un quota de minutes | Notre offre partenaire |
 | Données partenaire | Chiffres agrégés et usage par code ; **jamais de nom** de salarié ou d'usager | RGPD |
 | Vol | Planche qui quitte le rack sans session armée : alarme sonore du Pi, alerte exploitant, statut « sortie sans client » on-chain | Notre choix (voir décisions) |
+| Inspection et validation | Chaque décision (casse validée ou refusée, perte confirmée, remise en service) enregistre **le rôle du validateur** (exploitant, tournée, réparateur, école), **jamais son nom** | Décision validée (RGPD) |
 
 **Parrainage, sans compte** : chaque personne qui donne son numéro reçoit un code de parrainage affiché dans l'interface. Le code est aléatoire (`SURF-7K2P`) et ne contient jamais le numéro. Il alimente la même cagnotte que la photo : hypothèse 2 € pour le parrain et 2 € pour le filleul. Le parrain n'est crédité qu'après la première location terminée du filleul, avec un plafond de parrainages par numéro (anti-fraude).
 
 **Le parc de la maquette** : trois stations A, B, C avec deux planches chacune (korko-01 et 02 à A, 03 et 04 à B, 05 et 06 à C). Une planche rendue à une autre station est « étrangère » : le cloud crée une mission de rapatriement.
+
+## Les offres Notox
+
+Deux offres simples, pour que le matériel se vende et que les planches durent.
+
+**Parc durable financé** : une commune, une école ou un partenaire finance un parc de **10 planches sur 10 ans**. Notox fournit le rack, les planches et le service : réparation, reconditionnement, remplacement. Chaque planche garde son carnet de vie ; à la fin, **0 planche jetée** : réparée, reconditionnée ou revendue avec son historique.
+
+**Rack mobile sur roulettes pour les écoles de surf** : le rack se déplace avec l'école, d'un spot à l'autre. **La tournée est faite par l'école** elle-même (pas de salarié Notox sur la plage). Le Pi tourne sur **batterie avec un petit panneau solaire**, et se **recharge le soir** au local de l'école. Le prof reste dans l'eau avec ses élèves, les planches se louent seules en dehors des cours.
 
 ## Robustesse : ce qui casse, et ce qui se passe alors
 
@@ -141,7 +152,7 @@ Les montants marqués « hypothèse » sont à fixer dans le back-office ; le co
 
 | Problème | Ce qui se passe | Statut |
 | --- | --- | --- |
-| **Non-retour** | SMS au plafond, forfait journée ou tarif majoré, puis achat implicite (caution prélevée, NFT transféré), avec le garde-fou tournée | Statut PERDUE codé ; transfert NFT à coder |
+| **Non-retour** | SMS de rappel, forfait journée, puis au seuil Y statut « non rendue » et alerte. Achat implicite (caution prélevée, planche vendue, événement PERDUE) **uniquement après confirmation de l'exploitant** | Codé ; transfert du NFT à coder (M8) |
 | **Casse signalée** | Photo, diagnostic IA, validation par l'exploitant, forfait retenu ; la planche passe « en atelier » et n'est plus proposée | À coder |
 | **Casse non signalée** | Imputée au dernier loueur, sauf si sa photo de retour (empreinte on-chain) prouve le bon état. Détectée par le loueur suivant ou par la tournée | Pitch ; empreinte en V2 |
 | **Vol** (départ sans session) | Alarme sonore du Pi (en démo : le son de l'ordinateur), alerte exploitant, statut « sortie sans client ». Le QR gravé dit « planche Grab&Surf, ramène-la » ; la revente est difficile car le registre est public | Alerte codée ; alarme à coder |
@@ -195,7 +206,7 @@ Chaque développeur teste sur son propre contrat, pour ne pas salir le carnet de
 
 ### Transférer le NFT au client (achat implicite)
 
-1. La planche passe « vendue » ; le NFT reste chez Grab&Surf, à réclamer.
+1. L'exploitant confirme la perte après vérification ; la planche passe « vendue » ; le NFT reste chez Grab&Surf, à réclamer.
 2. Le client reçoit un SMS : « Cette planche est maintenant à toi. Réclame son NFT : lien ».
 3. Sur cette page, il colle l'adresse d'un wallet qu'il a déjà (Core, MetaMask) ; le wallet opérateur, propriétaire des NFT, lui transfère le sien (`transferFrom` standard). **Le contrat actuel le permet déjà, sans V2.**
 
@@ -219,14 +230,15 @@ Neuf modules, classés par priorité : P0 indispensable à la démo, P1 très so
 
 | Module | Priorité | Qui | Critère d'acceptation |
 | --- | --- | --- | --- |
-| M1 Parcours client mobile, avec parrainage | P0 | Dev1 | Du scan au « Prends korko-01 » en 2 gestes une fois inscrit ; reçu et code de parrainage affichés |
-| M5 Tableau de bord exploitant | P0 | Dev2 | Une page : planches, alertes, 3 missions expliquées en une phrase |
-| M7 Robustesse | P0 | Dev1 (station), Dev2 (serveur) | Coupure réseau puis retour : aucun événement perdu ni doublé ; alarme sur départ sans location |
-| M3 Retour par QR de la planche | P1 | Dev1 | Location fermée par QR du rack + QR de la planche + photo |
-| M2 Photo de retour et IA | P1 | Dev2 | Diagnostic affiché, 1 € crédité, casse transmise à l'exploitant |
+| M1 Parcours client mobile (location) | **P0** | Dev1 | Du scan au « Prends korko-01 » en 2 gestes une fois inscrit ; reçu affiché |
+| M5 Tableau de bord exploitant | **P0** | Dev2 | Une page : planches, alertes, 3 missions expliquées en une phrase |
+| M7 Robustesse | **P0** | Dev1 (station), Dev2 (serveur) | Coupure réseau puis retour : aucun événement perdu ni doublé ; alarme sur départ sans location |
 | M4 Passeport public | P1 | Dev2 | Historique on-chain lisible, ambassadeur fictif, bouton partager |
-| M6 Packs d'heures partenaire | P1 | Dev1 | Un code offre la session ; tableau partenaire avec liens de preuve |
-| M8 Achat implicite et NFT | P2 | Dev2 | Transfert du NFT visible sur Snowtrace |
+| M2 Photo de retour et IA | P1 | Dev2 | Diagnostic affiché, 1 € crédité, casse transmise à l'exploitant |
+| Parrainage | P1 | Dev1 | Code `SURF-XXXX` affiché et partageable ; 2 € au filleul, 2 € au parrain après la 1re location du filleul |
+| M6 Packs d'heures partenaire | P2 | Dev1 | Un code offre la session ; tableau partenaire avec liens de preuve |
+| M3 Retour par QR de la planche | P2 | Dev1 | Location fermée par QR du rack + QR de la planche |
+| M8 Achat implicite et NFT | P2 | Dev2 | Après confirmation de l'exploitant, transfert du NFT visible sur Snowtrace |
 | M9 Contrat V2 | P2 | Dev2 | Types INSPECTION et CORRECTION, empreinte de la photo |
 
 **Règles qui valent pour tous les modules** : aucune donnée personnelle sur la blockchain ; tous les montants dans un fichier de configuration, jamais en dur ; l'heure de référence est celle du flux des stations ; pages mobiles d'abord, en français et en anglais ; aucun tiret cadratin dans les textes affichés.
@@ -263,7 +275,7 @@ Trois catégories : ce qui est codé pour la démo, ce qui passe seulement dans 
 | Photo de retour, diagnostic IA validé par l'exploitant | Piste 4 (inspection par la communauté). Le brief exige que l'exploitant puisse contredire la machine : jamais de retenue sur la seule décision de l'IA |
 | QR gravé au laser sur chaque planche | Empêche de photographier une autre planche, passif, bon marché |
 | Cagnotte de 1 € par photo, et parrainage par numéro de téléphone | Plus simple à comprendre que des « tubes » : comme le gobelet consigné. Le parrainage alimente la même cagnotte, sans compte, et rend le service viral |
-| Packs d'heures pour les organisations | Offre partenaire simple à expliquer, preuve d'usage on-chain |
+| Packs d'heures pour les organisations | Offre partenaire simple à expliquer : chaque heure utilisée est historisée et son intégrité vérifiable |
 | Passeport public et ambassadeur | Pas cher, très démontrable, viral |
 | Tableau de bord exploitant avec 3 missions | Exigence de la piste 5 |
 | Retour par QR du rack + QR de la planche | Couvre panne du Pi, balise morte, SMS non reçu |
@@ -274,7 +286,7 @@ Trois catégories : ce qui est codé pour la démo, ce qui passe seulement dans 
 
 | Idée | Pourquoi pas dans la démo |
 | --- | --- |
-| Modèle Notox : racks et planches vendus + abonnement pour les écoles de surf, SAV et remplacement | Argument économique, rien à démontrer en code |
+| Modèle Notox : parc durable financé (10 planches sur 10 ans), rack mobile sur roulettes pour les écoles, SAV et remplacement | Argument économique, rien à démontrer en code |
 | Achat implicite avec transfert du NFT | Codé seulement s'il reste du temps (M8) |
 | Loueur suivant qui signale la casse sous 5 minutes | Gestion des litiges trop longue à coder en 6 h |
 | Agent IA ou MCP qui répond à l'exploitant sur les données on-chain | Le tableau de bord doit marcher d'abord |
@@ -329,26 +341,27 @@ Une seule histoire continue, jouée en direct sur la maquette : un touriste loue
 - [ ] Onglets ouverts : page client, Snowtrace du contrat, exploitant, MAIF, passeport.
 - [ ] **Vidéo de secours de toute la démo**, enregistrée à l'avance, si le Wi-Fi ou Fuji lâchent.
 
-## Le pitch en 5 minutes
+## Le pitch en 5 minutes : 6 actes
 
-La démo prend la moitié du temps : le jury veut voir ce qui tourne.
+La démo occupe le cœur du pitch : le jury veut voir ce qui tourne. **La blockchain est l'infrastructure, pas le produit** : on parle d'abord de surf, de planches et de confiance.
 
-| Temps | Partie | Contenu |
+| Acte | Titre | Contenu |
 | --- | --- | --- |
-| 0:00 – 0:30 | Le problème | On loue sans personne sur la plage : qui garantit quoi, quand il n'y a plus personne ? |
-| 0:30 – 3:00 | La démo | L'histoire de la section précédente |
-| 3:00 – 4:00 | Le modèle | Matériel Notox + abonnement pour les écoles ; packs d'heures partenaires ; occasion certifiée |
-| 4:00 – 4:30 | Ce qui casse en premier | La détection radio, et ce qui se passe alors |
-| 4:30 – 5:00 | La suite | Ce qu'on demande, la vision |
+| 1 | Le problème | On loue sans personne sur la plage : qui garantit quoi, quand il n'y a plus personne ? |
+| 2 | Zéro friction | Démo : QR, numéro, code SMS, « Prends korko-01 », raccroche, reçu. 2 gestes, pas d'appli, pas de wallet |
+| 3 | La vie de la planche | Photo de retour (1 €), passeport, ambassadeur : chaque planche a une histoire qu'on partage |
+| 4 | Un registre infalsifiable | Vol : l'alarme sonne. Chaque étape est inscrite dans un registre public ; une erreur se corrige, elle ne s'efface pas |
+| 5 | Exploitant, Notox, partenaire | 3 missions par jour pour l'exploitant ; parc durable financé pour Notox ; pour la MAIF, chaque heure utilisée est historisée et son intégrité vérifiable |
+| 6 | La planche, un actif vivant | Une planche qui dure, se répare, se revend avec son historique : 0 planche jetée. Ce qui casse en premier et ce qui se passe alors |
 
 ### Phrases prêtes à dire
 
 - **Accroche** : « Grab&Surf loue des planches sans personne sur la plage, et c'est la planche elle-même qui garde la preuve de tout ce qui s'est passé. »
 - **La blockchain sans wallet** : « Le surfeur ne voit jamais la blockchain. Il ne signe rien, il ne paie aucun frais. C'est la planche qui a une identité on-chain, pas lui un wallet. »
 - **Pourquoi une blockchain** : « Une base de données, c'est notre parole. La blockchain, c'est une preuve que le partenaire, le client ou un acheteur peuvent vérifier sans nous faire confiance. »
-- **Le partenaire** : « Vous offrez 500 heures de surf, la blockchain prouve qu'elles ont été surfées. »
+- **Le partenaire** : « Vous offrez 500 heures de surf : chaque heure utilisée est historisée et son intégrité vérifiable. » (Ne jamais dire que la blockchain prouve qu'ils ont surfé : elle prouve que l'historique n'a pas été modifié.)
 - **La photo** : « Une photo au retour, c'est 1 € pour le client et une preuve infalsifiable de l'état de la planche. »
-- **Le vol** : « Une planche qui ne revient pas n'est pas volée : elle est achetée, et son NFT change de propriétaire. »
+- **Le vol** : « Une planche qui ne revient pas n'est pas volée : une fois la perte vérifiée par l'exploitant, elle est achetée, et son NFT peut changer de propriétaire. »
 - **L'alarme** : « On a gardé une alarme sonore, parce qu'elle coûte quelques euros et ne demande aucun geste à l'usager honnête. »
 - **Les écoles de surf** : « Le prof reste dans l'eau avec ses élèves, les planches se louent toutes seules. Il économise un salaire. »
 - **Ce qui casse en premier** : « La détection radio. Un faux départ ne s'efface pas : il se corrige, et la correction reste visible. Et si le réseau tombe, la station continue seule et rattrape ensuite. »
@@ -440,7 +453,7 @@ H+0 = le moment où l'équipe valide ce document. **Gel des fonctionnalités à 
 | --- | --- |
 | Nom du projet : Grab&Surf ou Take-Off Rack ? | Grab&Surf |
 | Contrat V2 (INSPECTION, CORRECTION, VENDUE) ? | Non, sauf si Dev2 est en avance à H+2:00 |
-| Après le plafond : tarif majoré (le brief, pour que la planche revienne vite : une station n'a que 2 planches) ou forfait journée dégressif (les usages des loueurs, pour pouvoir surfer ailleurs) ? | Compromis proposé : 0,20 €/min jusqu'à un forfait journée (hypothèse 30 € par 24 h), SMS à 3 h qui informe sans pénaliser. À trancher par l'équipe |
+| Après le plafond : tarif majoré ou forfait journée ? | **Tranché** : 0,20 €/min jusqu'à un forfait journée de 30 € par 24 h, SMS de rappel qui informe sans pénaliser, prix jamais au-dessus de la caution ; seuil de non-retour séparé du prix |
 | Montant de l'empreinte | 300 € |
 | Grille des forfaits de réparation | À définir par Team3 avec Notox ; valeurs fictives en démo |
 | Remise volume des packs | −20 % |
