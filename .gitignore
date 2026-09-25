@@ -5,6 +5,7 @@ data/
 *.db
 node_modules/
 frontend/dist/
+site/dist/
 .DS_Store
 # queue files left by the old prototype (korko_chain.py)
 chaine_file*.ndjson

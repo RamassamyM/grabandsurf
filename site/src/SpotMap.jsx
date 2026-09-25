@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Link } from 'react-router-dom'
-import { api } from '../../api.js'
-import { usePoll } from '../../components/ui.jsx'
+import { appUrl } from './config.js'
 import Icon from './Icon.jsx'
 import { REGIONS, SPOTS, searchSpots } from './spots.js'
 
@@ -25,11 +23,6 @@ function pinIcon(open, active) {
   })
 }
 
-function boardCount(station) {
-  const b = station.available_boards
-  return Array.isArray(b) ? b.length : Number(b) || 0
-}
-
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
@@ -42,8 +35,6 @@ export default function SpotMap({ lang, t }) {
   const [query, setQuery] = useState('')
   const [country, setCountry] = useState('all')
   const [active, setActive] = useState(null)
-  const live = usePoll(() => api.stations().catch(() => []), 10000, [])
-  const stations = useMemo(() => Object.fromEntries((live.data || []).map((s) => [s.id, s])), [live.data])
 
   const results = useMemo(
     () => searchSpots(query, lang).filter((s) => country === 'all' || s.country === country)
@@ -53,14 +44,12 @@ export default function SpotMap({ lang, t }) {
   const openCount = SPOTS.filter((s) => s.station).length
 
   const popupHtml = (s) => {
-    const st = s.station ? stations[s.station] : null
     const status = s.station
       ? `<span class="gs-pill gs-open">${escapeHtml(t.open)}</span>`
       : `<span class="gs-pill gs-soon">${escapeHtml(t.soon)}</span>`
-    const boards = st ? `<div class="gs-meta">${escapeHtml(st.online === false ? t.offline : t.boards.replace('{n}', boardCount(st)))}</div>` : ''
-    const rent = s.station ? `<a class="gs-rent" href="/s/${s.station}">${escapeHtml(t.rent)}</a>` : ''
+    const rent = s.station ? `<a class="gs-rent" href="${appUrl(`/s/${s.station}`)}">${escapeHtml(t.rent)}</a>` : ''
     return `<div class="gs-pop"><div class="gs-name">${escapeHtml(s.name)}</div>
-      <div class="gs-town">${escapeHtml(s.town)} · ${escapeHtml(REGIONS[s.region][lang])}</div>${status}${boards}${rent}</div>`
+      <div class="gs-town">${escapeHtml(s.town)} · ${escapeHtml(REGIONS[s.region][lang])}</div>${status}${rent}</div>`
   }
 
   useEffect(() => {
@@ -89,7 +78,7 @@ export default function SpotMap({ lang, t }) {
     })
     if (active && markers.current[active]) markers.current[active].openPopup()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, stations, active])
+  }, [lang, active])
 
   // Only the spots matching the search stay on the map.
   useEffect(() => {
@@ -136,7 +125,6 @@ export default function SpotMap({ lang, t }) {
         </p>
         <ul className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 max-lg:max-h-72">
           {results.map((s) => {
-            const st = s.station ? stations[s.station] : null
             return (
               <li key={s.id}>
                 <button onClick={() => focus(s)}
@@ -147,7 +135,7 @@ export default function SpotMap({ lang, t }) {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-bold text-night-900">{s.name}</span>
                     <span className="block truncate text-sm text-slate-600">
-                      {s.town} · {st && st.online !== false ? t.boards.replace('{n}', boardCount(st)) : REGIONS[s.region][lang]}
+                      {s.town} · {REGIONS[s.region][lang]}
                     </span>
                   </span>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${s.station ? 'bg-sun-500 text-night-900' : 'bg-foam-100 text-slate-600'}`}>
@@ -160,10 +148,10 @@ export default function SpotMap({ lang, t }) {
           {!results.length && <li className="px-3 py-6 text-center text-slate-600">{t.none}</li>}
         </ul>
         {active && SPOTS.find((s) => s.id === active)?.station && (
-          <Link to={`/s/${SPOTS.find((s) => s.id === active).station}`}
+          <a href={appUrl(`/s/${SPOTS.find((s) => s.id === active).station}`)}
             className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-sun-500 px-5 py-3 font-extrabold text-night-900 hover:bg-sun-400">
             {t.rent} <Icon name="arrow" className="h-5 w-5" />
-          </Link>
+          </a>
         )}
       </div>
       <div ref={holder} className="order-1 h-[420px] min-w-0 overflow-hidden rounded-3xl shadow-lg ring-4 ring-white/10 lg:order-2 lg:h-[560px]"

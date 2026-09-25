@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { LangSwitch, useT } from '../../i18n.jsx'
+import { appUrl } from './config.js'
+import { LangSwitch, useLang } from './lang.jsx'
 import { CONTENT, RIDERS } from './content.js'
 import Icon from './Icon.jsx'
 import SpotMap from './SpotMap.jsx'
 
 // Public landing page: the concept (from the pitch deck), the board passport, the riders and the map of spots.
 export default function LandingPage() {
-  const { lang } = useT()
+  const { lang } = useLang()
   const c = CONTENT[lang] || CONTENT.fr
   useEffect(() => {
     document.title = `Grab&Surf · ${c.hero.title}`
@@ -100,9 +100,9 @@ function Hero({ c }) {
             <a href="#spots" className="inline-flex items-center gap-2 rounded-full bg-sun-500 px-6 py-3.5 text-lg font-extrabold text-night-900 hover:bg-sun-400">
               <Icon name="pin" className="h-5 w-5" /> {c.find}
             </a>
-            <Link to="/demo?url=/s/A" className="inline-flex items-center gap-2 rounded-full border-2 border-white/30 px-6 py-3.5 text-lg font-bold hover:border-white">
+            <a href={appUrl("/demo?url=/s/A")} className="inline-flex items-center gap-2 rounded-full border-2 border-white/30 px-6 py-3.5 text-lg font-bold hover:border-white">
               <Icon name="qr" className="h-5 w-5" /> {c.demo}
-            </Link>
+            </a>
           </div>
         </div>
         <img src="/brand/logo.webp" alt="Grab&Surf" className="mx-auto w-full max-w-md drop-shadow-2xl" width="720" height="479" />
@@ -185,9 +185,9 @@ function Passport({ c }) {
           <Heading title={c.title} accent={c.accent} light />
           <p className="mt-4 text-lg text-foam-300">{c.text}</p>
           <p className="mt-4 font-bold text-sun-500">{c.caption}</p>
-          <Link to="/p/korko-01" className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-extrabold text-night-900 hover:bg-foam-100">
+          <a href={appUrl("/p/korko-01")} className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-extrabold text-night-900 hover:bg-foam-100">
             {c.cta} <Icon name="arrow" className="h-5 w-5" />
-          </Link>
+          </a>
         </div>
         <div className="rounded-3xl bg-white p-6 text-night-900 shadow-xl">
           <div className="flex items-center justify-between">
@@ -230,10 +230,10 @@ function Riders({ c, lang }) {
                 </div>
               </div>
               <p className="mt-4 flex-1 italic text-night-900">« {r.story[lang] || r.story.fr} »</p>
-              <Link to={`/p/${r.board}`} className="mt-4 flex items-center justify-between rounded-2xl bg-foam-100 px-4 py-2 text-sm font-bold hover:bg-foam-200">
+              <a href={appUrl(`/p/${r.board}`)} className="mt-4 flex items-center justify-between rounded-2xl bg-foam-100 px-4 py-2 text-sm font-bold hover:bg-foam-200">
                 <span>{c.surfed} <span className="font-extrabold">{r.board}</span></span>
                 <Icon name="arrow" className="h-4 w-4" />
-              </Link>
+              </a>
             </article>
           ))}
         </div>
@@ -280,9 +280,9 @@ function Pros({ c }) {
           ))}
         </div>
         <div className="mt-8 text-center">
-          <Link to="/partner/maif" className="inline-flex items-center gap-2 rounded-full bg-night-900 px-6 py-3 font-extrabold text-white hover:bg-night-700">
+          <a href={appUrl("/partner/maif")} className="inline-flex items-center gap-2 rounded-full bg-night-900 px-6 py-3 font-extrabold text-white hover:bg-night-700">
             {c.partner} <Icon name="arrow" className="h-5 w-5" />
-          </Link>
+          </a>
         </div>
       </div>
     </section>
@@ -292,7 +292,7 @@ function Pros({ c }) {
 function Final({ c }) {
   const [src, setSrc] = useState(null)
   useEffect(() => {
-    QRCode.toDataURL(`${window.location.origin}/p/korko-01`, { margin: 1, width: 360, color: { dark: '#0B2533', light: '#00000000' } })
+    QRCode.toDataURL(appUrl('/p/korko-01'), { margin: 1, width: 360, color: { dark: '#0B2533', light: '#00000000' } })
       .then(setSrc).catch(() => setSrc(null))
   }, [])
   return (
@@ -301,9 +301,9 @@ function Final({ c }) {
         <div>
           <h2 className="font-brush text-6xl text-sun-500 sm:text-7xl">{c.title}</h2>
           <p className="mt-4 text-xl text-foam-300">{c.text}</p>
-          <Link to="/p/korko-01" className="mt-6 inline-flex items-center gap-2 rounded-full bg-sun-500 px-6 py-3 font-extrabold text-night-900 hover:bg-sun-400">
+          <a href={appUrl("/p/korko-01")} className="mt-6 inline-flex items-center gap-2 rounded-full bg-sun-500 px-6 py-3 font-extrabold text-night-900 hover:bg-sun-400">
             {c.cta} <Icon name="arrow" className="h-5 w-5" />
-          </Link>
+          </a>
         </div>
         <div className="mx-auto flex h-[420px] w-48 items-center justify-center rounded-[50%/22%] bg-corkwood shadow-2xl ring-8 ring-night-700"
           style={{ backgroundImage: 'radial-gradient(rgba(107,72,32,.35) 1px, transparent 1.5px), radial-gradient(rgba(255,236,200,.3) 1px, transparent 1.5px)', backgroundSize: '9px 9px, 13px 13px' }}>
@@ -324,9 +324,9 @@ function Footer({ c, nav }) {
         </div>
         <nav className="flex flex-wrap gap-4 text-sm font-bold text-white/80">
           <a href="#spots" className="hover:text-sun-500">{nav.spots}</a>
-          <Link to="/app" className="hover:text-sun-500">{c.demo}</Link>
-          <Link to="/partner/maif" className="hover:text-sun-500">{c.partner}</Link>
-          <Link to="/operator" className="hover:text-sun-500">{c.operator}</Link>
+          <a href={appUrl("/")} className="hover:text-sun-500">{c.demo}</a>
+          <a href={appUrl("/partner/maif")} className="hover:text-sun-500">{c.partner}</a>
+          <a href={appUrl("/operator")} className="hover:text-sun-500">{c.operator}</a>
         </nav>
       </div>
     </footer>

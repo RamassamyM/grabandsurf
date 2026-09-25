@@ -36,7 +36,7 @@ export default function DemoPage() {
   return (
     <div className="min-h-dvh bg-gradient-to-br from-ocean-900 via-ocean-700 to-cork-600 px-4 py-6">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
-        <Link to="/app" className="rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
+        <Link to="/" className="rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
         <div className="flex items-center gap-3">
           <LangSwitch />
           <PhoneSwitchButton on onClick={exit} />

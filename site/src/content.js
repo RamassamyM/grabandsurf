@@ -72,7 +72,7 @@ export const CONTENT = {
       text: 'Nos racks ouverts à Biarritz et les prochaines ouvertures sur les côtes françaises et espagnoles.',
       search: 'Chercher un spot, une ville, une région',
       open: 'Ouvert', soon: 'Bientôt', all: 'Tous', france: 'France', spain: 'Espagne',
-      boards: '{n} planche(s) dispo', offline: 'station hors ligne', rent: 'Louer ici', none: 'Aucun spot ne correspond.',
+      rent: 'Louer ici', none: 'Aucun spot ne correspond.',
       count: '{open} ouverts, {soon} à venir',
     },
     final: {
@@ -153,7 +153,7 @@ export const CONTENT = {
       text: 'Our open racks in Biarritz and the next openings on the French and Spanish coasts.',
       search: 'Search a spot, a town, a region',
       open: 'Open', soon: 'Soon', all: 'All', france: 'France', spain: 'Spain',
-      boards: '{n} board(s) available', offline: 'station offline', rent: 'Rent here', none: 'No spot matches.',
+      rent: 'Rent here', none: 'No spot matches.',
       count: '{open} open, {soon} coming soon',
     },
     final: {
@@ -234,7 +234,7 @@ export const CONTENT = {
       text: 'Nuestros racks abiertos en Biarritz y las próximas aperturas en las costas francesas y españolas.',
       search: 'Buscar un spot, una ciudad, una región',
       open: 'Abierto', soon: 'Pronto', all: 'Todos', france: 'Francia', spain: 'España',
-      boards: '{n} tabla(s) disponible(s)', offline: 'estación sin conexión', rent: 'Alquilar aquí', none: 'Ningún spot coincide.',
+      rent: 'Alquilar aquí', none: 'Ningún spot coincide.',
       count: '{open} abiertos, {soon} próximamente',
     },
     final: {

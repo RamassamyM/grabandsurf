@@ -24,7 +24,7 @@ export function StaffHeader({ role, setRole, children }) {
     <header className="bg-ocean-900 text-white print:hidden">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Link to="/app" className="rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
+          <Link to="/" className="rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
           <nav className="flex gap-1 text-sm">
             {links.map(([to, label]) => (
               <NavLink key={to} to={to} end className={({ isActive }) =>

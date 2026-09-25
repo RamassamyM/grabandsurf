@@ -124,15 +124,25 @@ Remettre la démo à zéro : bouton en bas de la page exploitant, ou `python -m 
   dans un téléphone, avec en bas le navigateur, l'appareil photo (des QR factices à toucher pour « scanner »
   un rack ou une planche) et les messages (les SMS reçus, liens cliquables).
 
-## Site vitrine
+## Site vitrine (projet séparé : `site/`)
 
-- `/` est la landing page publique (FR, EN, ES) : le concept repris du pitch, le passeport des planches,
-  les ambassadeurs, les offres (écoles, marque, entreprises, sponsors) et la carte des spots en France et
-  en Espagne avec zoom et recherche. Les racks ouverts affichent en direct le nombre de planches libres.
-- Charte du pitch : bleu nuit `#0B2533`, turquoise `#1BA8C8`, soleil `#F7B32B`, polices Outfit et Kaushan Script
-  (servies depuis `frontend/public/fonts`). Les spots sont dans `frontend/src/pages/landing/spots.js`.
+Le site public est un projet à part : son propre `package.json`, ses propres ports, aucun appel au serveur.
+Il ne tourne pas avec l'app et n'a pas besoin du backend.
+
+```bash
+cd site
+npm install
+npm run dev        # http://localhost:5180
+npm run build      # site statique dans site/dist/ (à héberger n'importe où)
+npm run preview    # http://localhost:4180, pour vérifier le build
+```
+
+- Contenu : le concept repris du pitch, le passeport, les ambassadeurs, les offres, et la carte des spots
+  (France et Espagne, zoom, recherche). Textes en FR, EN, ES dans `site/src/content.js`, spots dans `site/src/spots.js`.
+- Les boutons « Louer ici », « Essayer la démo » et les liens vers les passeports ouvrent l'app de location à
+  l'adresse `VITE_APP_URL` (voir `site/.env.example`, par défaut `http://localhost:5173`).
+- Charte du pitch : bleu nuit `#0B2533`, turquoise `#1BA8C8`, soleil `#F7B32B`, polices Outfit et Kaushan Script.
 - Carte : Leaflet avec les fonds CARTO / OpenStreetMap (sans clé, attribution affichée).
-- L'ancien menu des pages de démo est maintenant sur `/app`.
 
 ## 3. Tests
 

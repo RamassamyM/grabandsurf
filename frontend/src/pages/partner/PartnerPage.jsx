@@ -26,7 +26,7 @@ export default function PartnerPage() {
     <div className="min-h-dvh pb-12">
       <header className="bg-ocean-500 px-4 pb-10 pt-6 text-white">
         <div className="mx-auto max-w-3xl">
-          <Link to="/app" className="inline-block rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
+          <Link to="/" className="inline-block rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
           <div className="mt-6 text-sm uppercase tracking-widest text-white/80">Espace partenaire</div>
           <h1 className="font-display text-4xl font-bold">{data.partner.name}</h1>
           <p className="mt-2 max-w-xl text-white/90">{data.statement}</p>
