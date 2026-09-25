@@ -13,7 +13,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select, update
 
-from .api import customers, fleet, inspections, owner, partners, passport, photos, rentals, stations
+from .api import (claims, customers, fleet, inspections, owner, partners, passport, photos, rentals,
+                  sponsorships, stations)
 from .i18n import request_lang, t
 from .db import create_tables, make_engine, make_sessionmaker
 from .models import Board, ChainTx
@@ -78,7 +79,8 @@ def create_app(settings: Optional[Settings] = None, services: Optional[Services]
         lang = request_lang(request.headers.get("x-lang", ""), request.headers.get("accept-language", ""))
         return JSONResponse({"detail": t("invalid_request", lang, field=field or "format")}, status_code=400)
 
-    for module in (stations, customers, rentals, partners, fleet, photos, passport, owner, inspections):
+    for module in (stations, customers, rentals, partners, fleet, photos, passport, owner, inspections,
+                   sponsorships, claims):
         app.include_router(module.router)
 
     dist = settings.frontend_dist

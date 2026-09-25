@@ -17,11 +17,11 @@ from ..deps import current_customer, get_db, get_services, get_settings, require
 from ..domain import repairs, wallet
 from ..domain.pricing import format_eur
 from ..i18n import t
-from ..models import Alert, Board, Customer, DamageReport, Inspection, Photo, Rental, RepairFee
+from ..models import Alert, Board, ChainTx, Customer, DamageReport, Inspection, Photo, Rental, RepairFee
 from ..schemas import DamageReportRequest, PhotoUpload, ReviewRequest
 from ..services import Services
 from ..settings import Settings
-from ..workflows import board_dict, clock, credit, raise_alert, withhold_repair
+from ..workflows import board_dict, clock, credit, raise_alert, record_chain, withhold_repair
 
 router = APIRouter(prefix="/api")
 
@@ -54,7 +54,7 @@ def photo_view(db: Session, photo: Photo, settings: Settings) -> dict[str, Any]:
     result = json.loads(photo.ai_result or "{}")
     reports = db.scalars(select(DamageReport).where(DamageReport.photo_id == photo.id)).all()
     return {"id": photo.id, "rental_id": photo.rental_id, "board_id": photo.board_id, "t": photo.t,
-            "sha256": photo.sha256, "has_image": bool(photo.path), "rewarded": photo.rewarded,
+            "sha256": photo.sha256, "signature": photo.signature, "signer": photo.signer, "has_image": bool(photo.path), "rewarded": photo.rewarded,
             "ai_result": result, "suggestion": suggestion_for(db, result.get("damages", []), settings),
             "damage_reports": [{"id": r.id, "status": r.status, "zone": r.zone, "severity": r.severity}
                                for r in reports]}
@@ -90,6 +90,15 @@ def upload_photo(body: PhotoUpload, customer: Customer = Depends(current_custome
     db.add(photo)
     db.flush()
     credit(db, customer.id, cents, "photo", now, rental.id)
+    same_photo = db.scalar(select(ChainTx.id).where(ChainTx.board_id == rental.board_id,
+                                                    ChainTx.event_type == "INSPECTION", ChainTx.proof == digest))
+    if image and rental.board_id and result["board_read"] == rental.board_id and not same_photo:
+        # the photo stays private; its fingerprint goes on-chain and is signed by the operator wallet
+        signed = services.chain.sign(digest)
+        if signed:
+            photo.signature, photo.signer = signed["signature"], signed["signer"]
+        record_chain(db, rental.board_id, "INSPECTION", rental.end_station or rental.start_station, now,
+                     rental.id, proof=digest)
 
     suggestion = suggestion_for(db, result.get("damages", []), settings)
     report_ids = []

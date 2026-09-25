@@ -141,9 +141,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{board} is not back yet. Hang it back or call the operator. Your deposit is only charged after a check.",
         "es": "{board} aún no ha vuelto. Cuélgala o llama al operador. La fianza solo se cobra tras una verificación."},
     "sms_bought": {
-        "fr": "{board} n'est pas revenue : elle est maintenant à toi. Caution de {amount} prélevée. Réponds avec l'adresse de ton wallet pour recevoir son NFT.",
-        "en": "{board} did not come back: it is now yours. Deposit of {amount} charged. Reply with your wallet address to receive its NFT.",
-        "es": "{board} no ha vuelto: ahora es tuya. Fianza de {amount} cobrada. Responde con la dirección de tu wallet para recibir su NFT."},
+        "fr": "{board} n'est pas revenue : elle est maintenant à toi. Caution de {amount} prélevée. Réclame son NFT ici : {link}",
+        "en": "{board} did not come back: it is now yours. Deposit of {amount} charged. Claim its NFT here: {link}",
+        "es": "{board} no ha vuelto: ahora es tuya. Fianza de {amount} cobrada. Reclama su NFT aquí: {link}"},
+    "claim_unknown": {
+        "fr": "Lien de réclamation inconnu ou expiré.", "en": "Unknown or expired claim link.",
+        "es": "Enlace de reclamación desconocido o caducado."},
+    "claim_done": {
+        "fr": "Ce NFT a déjà été réclamé.", "en": "This NFT has already been claimed.",
+        "es": "Este NFT ya ha sido reclamado."},
+    "claim_wallet_invalid": {
+        "fr": "Adresse de wallet invalide : 0x suivi de 40 caractères.",
+        "en": "Invalid wallet address: 0x followed by 40 characters.",
+        "es": "Dirección de wallet no válida: 0x seguido de 40 caracteres."},
     "sms_repair_fee": {
         "fr": "Casse confirmée sur {board} ({zone}) après vérification : {amount} retenus sur ta caution.",
         "en": "Damage confirmed on {board} ({zone}) after a check: {amount} withheld from your deposit.",

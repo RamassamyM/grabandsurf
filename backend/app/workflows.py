@@ -28,10 +28,10 @@ from .services import Services
 
 def record_chain(db: Session, board_id: str, event_type: str, station: str, t: float,
                  rental_id: Optional[int] = None, proof: str = "",
-                 extra: Optional[dict[str, Any]] = None) -> ChainTx:
+                 extra: Optional[dict[str, Any]] = None, note: str = "") -> ChainTx:
     """Add a chain_txs row; the event is published once the request is committed."""
     row = ChainTx(board_id=board_id, event_type=event_type, station=station or "", t=t,
-                  rental_id=rental_id, status="pending", proof=proof or "")
+                  rental_id=rental_id, status="pending", proof=proof or "", note=note[:120])
     db.add(row)
     db.flush()
     db.info.setdefault("chain_pending", []).append((row.id, board_id, event_type, station, t, proof, extra))
