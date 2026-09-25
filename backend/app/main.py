@@ -31,7 +31,8 @@ def build_services(settings: Settings) -> Services:
     return Services(sms=build_sms(settings.env), payment=FakePayment(),
                     photo_ai=build_photo_ai(settings.env.get("PHOTO_AI", "auto"), settings.env, settings.config),
                     alarm=Alarm(sound=settings.alarm_sound),
-                    chain=ChainService(settings.chain_mode, settings.env, settings.data_dir))
+                    chain=ChainService(settings.chain_mode, settings.env, settings.data_dir),
+                    public_base_url=settings.env.get("PUBLIC_BASE_URL", ""))
 
 
 def create_app(settings: Optional[Settings] = None, services: Optional[Services] = None) -> FastAPI:

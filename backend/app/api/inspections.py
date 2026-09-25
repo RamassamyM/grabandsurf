@@ -15,7 +15,7 @@ from ..models import Board, CardHold, DamageReport, Inspection, Photo, Rental
 from ..schemas import RoleRequest, WithholdRequest
 from ..services import Services
 from ..settings import Settings
-from ..workflows import clock, open_damage_reports, phone_of, release_deposit, withhold_repair
+from ..workflows import clock, has_return_photo, open_damage_reports, phone_of, release_deposit, withhold_repair
 from .fleet import mask_phone
 from .photos import fee_grid, photo_view
 
@@ -36,7 +36,9 @@ def session_view(db: Session, r: Rental, settings: Settings, now: float) -> dict
         "return_mode": r.return_mode, "charged_cents": r.charged_cents,
         "deposit_status": r.deposit_status, "deposit_label": DEPOSIT_LABELS.get(r.deposit_status, r.deposit_status),
         "deposit_left_cents": (hold.amount_cents - hold.captured_cents) if hold and hold.status == "authorized" else 0,
-        "auto_release_in": format_duration(r.deposit_due_t - now) if r.deposit_due_t and r.deposit_status == "pending_check" else None,
+        "photo_missing": not has_return_photo(db, r),
+        "auto_release_in": format_duration(max(0, r.deposit_due_t - now))
+        if r.deposit_due_t and r.deposit_status == "pending_check" and has_return_photo(db, r) else None,
         "checked_role": r.checked_role,
         "photos": [photo_view(db, p, settings) for p in photos],
         "damage_reports": [{"id": d.id, "zone": d.zone, "severity": d.severity, "status": d.status,

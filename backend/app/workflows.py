@@ -97,6 +97,11 @@ def available_boards(db: Session, station: str) -> list[str]:
 
 # ------------------------------------------------------------------ rentals
 
+def has_return_photo(db: Session, rental: Rental) -> bool:
+    """A photo of the rented board (its QR read) was sent for this rental."""
+    return db.scalar(select(Photo.id).where(Photo.rental_id == rental.id, Photo.board_id == rental.board_id)) is not None
+
+
 def rental_view(db: Session, rental: Rental, config: dict[str, Any], now_t: float) -> dict[str, Any]:
     """Rental as shown to the customer, with a live price while at sea."""
     view: dict[str, Any] = {
@@ -125,6 +130,7 @@ def rental_view(db: Session, rental: Rental, config: dict[str, Any], now_t: floa
         }
         view["photo_credited"] = db.scalar(select(Photo.id).where(
             Photo.rental_id == rental.id, Photo.rewarded.is_(True))) is not None
+        view["photo_taken"] = has_return_photo(db, rental)
     return view
 
 
@@ -158,7 +164,8 @@ def close_rental(db: Session, services: Services, config: dict[str, Any], rental
         parts.append(tr("sms_receipt_pack", lang, minutes=q["pack_minutes"]))
     if q["wallet_used_cents"]:
         parts.append(tr("sms_receipt_wallet", lang, amount=format_eur(q["wallet_used_cents"])))
-    parts.append(tr("sms_receipt_end", lang))
+    base = services.public_base_url.rstrip("/")
+    parts.append(tr("sms_receipt_end", lang, link="%s/s/%s?tab=receipt" % (base, station)))
     if customer:
         services.sms.send(db, customer.phone, " ".join(parts), t)
     reward_sponsor(db, services, config, rental.customer_id, t)
@@ -279,7 +286,7 @@ def _on_departure(db: Session, services: Services, board: Board, ev: fleet.Stati
     # next rental without a damage report: the previous renter's deposit is freed
     for previous in db.scalars(select(Rental).where(Rental.board_id == board.id, Rental.id != armed.id,
                                                     Rental.deposit_status == "pending_check")):
-        if not open_damage_reports(db, previous):
+        if not open_damage_reports(db, previous) and has_return_photo(db, previous):
             release_deposit(db, services, previous, "next_rental", ev.t)
     sms_to(db, services, armed.customer_id, "sms_departure", ev.t, board=board.id)
     record_chain(db, board.id, "DEPART", ev.station, ev.t, armed.id)
@@ -316,7 +323,8 @@ def run_timers(db: Session, services: Services, config: dict[str, Any], now: flo
             sms_to(db, services, r.customer_id, "sms_reminder", now, duration=format_duration(now - r.start_t),
                    board=r.board_id, amount=format_eur(config["pricing"]["day_pass_cents"]))
     for r in db.scalars(select(Rental).where(Rental.deposit_status == "pending_check")):
-        if r.deposit_due_t is not None and now >= r.deposit_due_t and not open_damage_reports(db, r):
+        if r.deposit_due_t is not None and now >= r.deposit_due_t and not open_damage_reports(db, r) \
+                and has_return_photo(db, r):
             release_deposit(db, services, r, "auto_8h", now)
     for s in db.scalars(select(Station)):
         if fleet.station_online(s.last_seen_t, now, config) is False and not s.offline_alerted:

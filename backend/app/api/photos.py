@@ -68,6 +68,10 @@ def upload_photo(body: PhotoUpload, customer: Customer = Depends(current_custome
     rental = db.get(Rental, body.rental_id)
     if rental is None or rental.customer_id != customer.id:
         raise HTTPException(404, t("rental_not_found", lang))
+    qr = (body.board_qr or "").strip().lower() or None
+    if rental.board_id and qr != rental.board_id.lower():
+        # only the photo of the rented board counts: another board or no QR is refused
+        raise HTTPException(400, t("wrong_board_qr" if qr else "photo_qr_required", lang, board=rental.board_id))
     try:
         image = base64.b64decode(body.image_base64.split(",", 1)[-1] or b"", validate=False)
     except (binascii.Error, ValueError) as e:
@@ -80,7 +84,6 @@ def upload_photo(body: PhotoUpload, customer: Customer = Depends(current_custome
         path = str(folder / ("%s.img" % digest))
         with open(path, "wb") as f:
             f.write(image)
-    qr = (body.board_qr or "").strip().lower() or None
     result = services.photo_ai.analyze(image, qr, body.damage_zone)
     now = clock(db)
     already = db.scalar(select(Photo.id).where(Photo.rental_id == rental.id, Photo.rewarded.is_(True))) is not None

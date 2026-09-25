@@ -64,6 +64,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "fr": "Ce QR n'est pas celui de ta planche {board}.",
         "en": "This QR code is not the one of your board {board}.",
         "es": "Este QR no es el de tu tabla {board}."},
+    "photo_qr_required": {
+        "fr": "Le QR gravé de {board} doit être lisible sur la photo.",
+        "en": "The engraved QR code of {board} must be readable on the photo.",
+        "es": "El QR grabado de {board} debe leerse en la foto."},
     "board_unknown": {
         "fr": "Planche inconnue.", "en": "Unknown board.", "es": "Tabla desconocida."},
     "image_unreadable": {
@@ -117,9 +121,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Wallet used: {amount}.",
         "es": "Monedero usado: {amount}."},
     "sms_receipt_end": {
-        "fr": "Ta caution est libérée après vérification de la planche (8 h au plus). Prends-la en photo : 1 € sur ta prochaine session.",
-        "en": "Your deposit is released once the board is checked (8 h at most). Take a photo of it: 1 € off your next session.",
-        "es": "Tu fianza se libera tras revisar la tabla (8 h como máximo). Hazle una foto: 1 € de descuento en tu próxima sesión."},
+        "fr": "Dernière étape : prends ta planche en photo avec son QR gravé, sinon ta caution n'est pas libérée (1 € offert) : {link}",
+        "en": "Last step: take a photo of your board with its engraved QR code, or your deposit is not released (1 € off): {link}",
+        "es": "Último paso: hazle una foto a tu tabla con su QR grabado, si no tu fianza no se libera (1 € de regalo): {link}"},
     "sms_deposit_released": {
         "fr": "Planche {board} vérifiée : ta caution est libérée. Merci et à bientôt sur l'eau !",
         "en": "Board {board} checked: your deposit is released. Thank you, see you on the water!",

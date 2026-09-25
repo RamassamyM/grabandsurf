@@ -121,14 +121,20 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertEqual(receipt["deposit_status"], "pending_check")  # freed once the board is checked
         inbox = c.get("/api/sms", params={"phone": "+33622222222"}).json()
         self.assertIn("korko-01 rendue, 12 min", inbox[0]["text"])
+        # the receipt text links to the return photo, and the deposit waits for it
+        self.assertIn("/s/A?tab=receipt", inbox[0]["text"])
+        self.assertFalse(done["photo_taken"])
         # the sponsor is credited after the guest's first finished rental
         self.assertEqual(c.get("/api/me", headers=friend).json()["wallet_cents"], 200)
 
         # 1:35 return photo with the right QR: +1 €, once
         img = base64.b64encode(b"fake-jpeg-bytes").decode()
         wrong = c.post("/api/photos", json={"rental_id": rental["id"], "board_qr": "korko-02", "image_base64": img},
-                       headers=tourist).json()
-        self.assertEqual(wrong["credited_cents"], 0)
+                       headers=tourist)
+        self.assertEqual(wrong.status_code, 400)  # photo of another board: refused, nothing recorded
+        self.assertIn("korko-01", wrong.json()["detail"])
+        no_qr = c.post("/api/photos", json={"rental_id": rental["id"], "image_base64": img}, headers=tourist)
+        self.assertEqual(no_qr.status_code, 400)
         photo = c.post("/api/photos", json={"rental_id": rental["id"], "board_qr": "korko-01", "image_base64": img},
                        headers=tourist).json()
         self.assertEqual(photo["credited_cents"], 100)
@@ -137,6 +143,7 @@ class DemoScenarioTest(unittest.TestCase):
                        headers=tourist).json()
         self.assertEqual(twice["credited_cents"], 0)
         self.assertEqual(c.get("/api/me", headers=tourist).json()["wallet_cents"], 300)
+        self.assertTrue(c.get("/api/rentals/%d" % rental["id"], headers=tourist).json()["photo_taken"])
 
         # 1:50 passport of korko-01
         p = c.get("/api/boards/korko-01/passport").json()
@@ -304,16 +311,36 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertEqual({b["id"]: b["status"] for b in c.get("/api/fleet").json()["boards"]}["korko-01"], "at_rack")
         self.assertEqual(c.post("/api/rentals/%d/withhold" % rid, json={"zone": "nose"}).status_code, 400)
 
-    def test_deposit_freed_by_next_rental_or_after_8h(self):
+    def _photo(self, headers, rental_id, board):
+        img = base64.b64encode(b"fake-jpeg").decode()
+        r = self.client.post("/api/photos", json={"rental_id": rental_id, "board_qr": board, "image_base64": img},
+                             headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+
+    def test_deposit_waits_for_the_return_photo(self):
         c, d = self.client, self.demo
+        deposit = lambda h, rid: c.get("/api/rentals/%d" % rid, headers=h).json()["receipt"]["deposit_status"]
+        # no photo: neither the next rental nor the 8 h timer frees the deposit
         h1, r1 = self._returned_rental("+33611110002", "korko-01", t0=10, minutes=5)
         h2 = d.sign_up("+33611110003")
         c.post("/api/rentals", json={"station": "A"}, headers=h2)
         d.event(1000, "DEPART", "korko-01")
-        self.assertEqual(c.get("/api/rentals/%d" % r1, headers=h1).json()["receipt"]["deposit_status"], "released")
-        h3, r3 = self._returned_rental("+33611110004", "korko-02", t0=2000, minutes=5)
-        d.event(2000 + 300 + 28800, "TIC")
-        self.assertEqual(c.get("/api/rentals/%d" % r3, headers=h3).json()["receipt"]["deposit_status"], "released")
+        self.assertEqual(deposit(h1, r1), "pending_check")
+        d.event(10 + 300 + 28800, "TIC")
+        self.assertEqual(deposit(h1, r1), "pending_check")
+        pending = c.get("/api/inspections").json()["pending"]
+        self.assertTrue([s for s in pending if s["id"] == r1][0]["photo_missing"])
+        # the photo of the right board arrives: the timer frees it
+        self._photo(h1, r1, "korko-01")
+        d.event(10 + 300 + 28800 + 10, "TIC")
+        self.assertEqual(deposit(h1, r1), "released")
+        # with a photo, the next rental frees it
+        h3, r3 = self._returned_rental("+33611110004", "korko-02", t0=40000, minutes=5)
+        self._photo(h3, r3, "korko-02")
+        h4 = d.sign_up("+33611110005")
+        c.post("/api/rentals", json={"station": "A"}, headers=h4)
+        d.event(41000, "DEPART", "korko-02")
+        self.assertEqual(deposit(h3, r3), "released")
 
     def test_owner_repair_fees_and_qr_codes(self):
         c = self.client

@@ -18,3 +18,4 @@ class Services:
     photo_ai: FakePhotoAI
     alarm: Alarm
     chain: ChainService
+    public_base_url: str = ""  # prefix of the links sent by SMS (empty: relative links, fine for the demo)
