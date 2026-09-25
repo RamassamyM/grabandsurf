@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { api, session } from '../../api.js'
-import QrScanner from '../../components/QrScanner.jsx'
+import { useParams, useSearchParams } from 'react-router-dom'
 import {
-  Button, Card, ErrorNote, Logo, Money, SmsInbox, Spinner, fileToBase64, formatDuration, usePoll,
-} from '../../components/ui.jsx'
-import { LangSwitch, useT } from '../../i18n.jsx'
-import { decodeImageFile, parseQr } from '../../qr.js'
+  Camera, Check, CheckCircle2, CreditCard, Gift, Loader2, MessageSquareText, Phone, QrCode, Share2, Tag, Timer, Waves as WavesIcon,
+} from 'lucide-react'
+import { api, session } from '@/api.js'
+import QrScanner from '@/components/QrScanner.jsx'
+import { CustomerHeader } from '@/components/Layout.jsx'
+import {
+  ErrorNote, IconBubble, Money, Script, SmsInbox, Spinner, fileToBase64, formatDuration, usePoll,
+} from '@/components/common.jsx'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useT } from '@/i18n.jsx'
+import { cn } from '@/lib/utils'
+import { decodeImageFile, parseQr } from '@/qr.js'
 
 // Customer journey at a rack: sign up once, then rent in 2 gestures.
 export default function StationPage() {
@@ -24,49 +34,69 @@ export default function StationPage() {
     if (me.error && me.error.status === 401) { session.clear(); setToken(null) }
   }, [me.error])
 
+  const onCodeSent = (p) => { session.setPhone(p); setPhone(p) }
   const onLogged = (tok, p) => { session.save(tok, p); setToken(tok); setPhone(p) }
   const logout = () => { session.clear(); setToken(null); setPhone(null) }
   const info = stationInfo.data
+  const user = token ? me.data : null
+  const cardOk = Boolean(user && user.card_hold_status === 'authorized')
+  const step = !user ? 0 : cardOk ? 2 : 1
+  const available = info?.available_boards || []
 
   return (
     <div className="min-h-dvh pb-28">
-      <header className="cork-texture px-4 pb-8 pt-6 text-white">
-        <div className="mx-auto flex max-w-md items-center justify-between gap-2">
-          <Link to="/" className="rounded-lg bg-white/90 px-2 py-1"><Logo small /></Link>
-          <LangSwitch />
+      <CustomerHeader walletCents={user ? user.wallet_cents : null}>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-widest text-lagoon">{t('rack', { id: station })}</span>
+          {token && <button onClick={logout} className="text-xs font-bold text-white/60 hover:text-white">{t('change_number')}</button>}
         </div>
-        <div className="mx-auto mt-6 max-w-md">
-          <div className="flex items-center justify-between">
-            <div className="text-sm uppercase tracking-widest text-white/80">{t('rack', { id: station })}</div>
-            {token && <button onClick={logout} className="text-sm font-medium text-white/90 underline">{t('change_number')}</button>}
+        <h1 className="mt-1 text-3xl font-extrabold leading-tight tracking-tight">{info ? info.name : 'Station'}</h1>
+        {!token && <p className="mt-1 text-2xl leading-snug"><Script>{t('tagline')}</Script></p>}
+        {info && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 font-bold">
+              <span className={cn('h-2 w-2 rounded-full', available.length ? 'bg-lagoon' : 'bg-coral')} />
+              {available.length ? t('available', { n: available.length }) : t('none_available')}
+            </span>
+            {info.online === false && <span className="text-xs text-white/60">{t('station_offline')}</span>}
           </div>
-          <h1 className="font-display text-3xl font-bold">{info ? info.name : 'Station'}</h1>
-          {info && (
-            <p className="mt-1 text-white/90">
-              {info.available_boards.length > 0 ? t('available', { n: info.available_boards.length }) : t('none_available')}
-              {info.online === false && ` · ${t('station_offline')}`}
-            </p>
-          )}
-        </div>
-      </header>
-
-      <main className="mx-auto -mt-4 max-w-md space-y-4 px-4">
-        {stationInfo.error && <ErrorNote error={stationInfo.error.message} />}
-        {!token && <SignUp onLogged={onLogged} referral={params.get('ref') || ''} />}
-        {token && !me.data && !me.error && <Spinner label={t('loading')} />}
-        {token && me.data && me.data.card_hold_status !== 'authorized' && <CardStep onDone={me.reload} />}
-        {token && me.data && me.data.card_hold_status === 'authorized' && (
-          <Rental station={station} me={me.data} reload={me.reload} available={info?.available_boards || []} />
         )}
-        {token && me.data && <WalletCard me={me.data} station={station} />}
-        {info && <p className="px-2 text-center text-xs text-ocean-700/70">{t('help_footer', { phone: info.operator_phone })}</p>}
+      </CustomerHeader>
+
+      <main className="mx-auto max-w-md space-y-4 px-4">
+        {step < 2 && <Stepper step={step} />}
+        {stationInfo.error && <ErrorNote error={stationInfo.error.message} />}
+        {!token && <SignUp onCodeSent={onCodeSent} onLogged={onLogged} referral={params.get('ref') || ''} />}
+        {token && !me.data && !me.error && <Spinner label={t('loading')} />}
+        {user && !cardOk && <CardStep onDone={me.reload} />}
+        {cardOk && <Rental station={station} me={user} reload={me.reload} available={available} />}
+        {info && <p className="px-4 pt-2 text-center text-xs text-muted-foreground">{t('help_footer', { phone: info.operator_phone })}</p>}
       </main>
       <SmsInbox phone={phone} />
     </div>
   )
 }
 
-function SignUp({ onLogged, referral }) {
+function Stepper({ step }) {
+  const { t } = useT()
+  const steps = [t('step_phone'), t('step_card'), t('step_surf')]
+  return (
+    <ol className="flex items-center gap-2 px-1">
+      {steps.map((label, i) => (
+        <li key={label} className="flex flex-1 items-center gap-2 last:flex-none">
+          <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold',
+            i < step ? 'bg-ocean text-white' : i === step ? 'bg-navy text-sun' : 'bg-muted text-muted-foreground')}>
+            {i < step ? <Check className="h-4 w-4" /> : i + 1}
+          </span>
+          <span className={cn('text-sm font-bold', i === step ? 'text-foreground' : 'text-muted-foreground')}>{label}</span>
+          {i < steps.length - 1 && <span className="h-px flex-1 bg-border" />}
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function SignUp({ onCodeSent, onLogged, referral }) {
   const { t } = useT()
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
@@ -78,7 +108,11 @@ function SignUp({ onLogged, referral }) {
   const send = async (e) => {
     e.preventDefault()
     setBusy(true); setError(null)
-    try { setSent(await api.sendOtp(phone)) } catch (err) { setError(err.message) }
+    try {
+      const r = await api.sendOtp(phone)
+      setSent(r)
+      onCodeSent(r.phone)  // the demo text shows right now, on the code step
+    } catch (err) { setError(err.message) }
     setBusy(false)
   }
   const verify = async (e) => {
@@ -91,44 +125,63 @@ function SignUp({ onLogged, referral }) {
     } catch (err) { setError(err.message) }
     setBusy(false)
   }
+  const restart = () => { setSent(null); setCode(''); onCodeSent(null) }
 
   if (!sent) {
     return (
       <Card>
-        <h2 className="font-display text-xl font-semibold">{t('signup_title')}</h2>
-        <p className="mt-1 text-sm text-ocean-700">{t('signup_text')}</p>
-        <form onSubmit={send} className="mt-4 space-y-3">
-          <label className="label" htmlFor="phone">{t('phone_label')}</label>
-          <input id="phone" className="input" type="tel" inputMode="tel" autoComplete="tel" required
-            placeholder={t('phone_placeholder')} value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <ErrorNote error={error} />
-          <Button className="w-full" busy={busy}>{t('send_code')}</Button>
-        </form>
+        <CardHeader>
+          <IconBubble icon={Phone} />
+          <CardTitle className="pt-2 text-xl">{t('signup_title')}</CardTitle>
+          <CardDescription>{t('signup_text')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={send} className="space-y-3">
+            <Label htmlFor="phone">{t('phone_label')}</Label>
+            <Input id="phone" className="h-12 text-lg" type="tel" inputMode="tel" autoComplete="tel" required
+              placeholder={t('phone_placeholder')} value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <ErrorNote error={error} />
+            <Button size="lg" className="w-full" disabled={busy}>
+              {busy && <Loader2 className="animate-spin" />} {t('send_code')}
+            </Button>
+          </form>
+        </CardContent>
       </Card>
     )
   }
   return (
     <Card>
-      <h2 className="font-display text-xl font-semibold">{t('code_title')}</h2>
-      <p className="mt-1 text-sm text-ocean-700">{t('code_sent_to', { phone: sent.phone })}</p>
-      {sent.demo_code && (
-        <p className="mt-3 rounded-xl bg-sand-100 px-4 py-3 text-sm">
-          {t('demo_code')} <strong className="font-mono text-lg tracking-widest">{sent.demo_code}</strong>
-        </p>
-      )}
-      <form onSubmit={verify} className="mt-4 space-y-3">
-        <label className="label" htmlFor="code">{t('code_label')}</label>
-        <input id="code" className="input text-center font-mono text-2xl tracking-[.5em]" inputMode="numeric"
-          maxLength={4} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
-        <label className="label" htmlFor="ref">{t('referral_label')}</label>
-        <input id="ref" className="input uppercase" placeholder="SURF-7K2P" value={ref}
-          onChange={(e) => setRef(e.target.value)} />
-        <ErrorNote error={error} />
-        <Button className="w-full" busy={busy}>{t('validate')}</Button>
-        <button type="button" className="w-full text-sm text-ocean-700 underline" onClick={() => setSent(null)}>
-          {t('change_number')}
-        </button>
-      </form>
+      <CardHeader>
+        <IconBubble icon={MessageSquareText} />
+        <CardTitle className="pt-2 text-xl">{t('code_title')}</CardTitle>
+        <CardDescription>{t('code_sent_to', { phone: sent.phone })}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {sent.demo_code && (
+          <div className="mb-4 flex items-center justify-between rounded-xl bg-foam px-4 py-3 text-sm">
+            <span className="text-muted-foreground">{t('demo_code')}</span>
+            <strong className="font-mono text-xl tracking-[.3em]">{sent.demo_code}</strong>
+          </div>
+        )}
+        <form onSubmit={verify} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="code">{t('code_label')}</Label>
+            <Input id="code" className="h-14 text-center font-mono text-3xl tracking-[.6em]" inputMode="numeric" autoComplete="one-time-code"
+              maxLength={4} required autoFocus value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ref" className="text-muted-foreground">{t('referral_label')}</Label>
+            <Input id="ref" className="uppercase" placeholder="SURF-7K2P" value={ref} onChange={(e) => setRef(e.target.value)} />
+          </div>
+          <ErrorNote error={error} />
+          <Button size="lg" className="w-full" disabled={busy || code.length < 4}>
+            {busy && <Loader2 className="animate-spin" />} {t('validate')}
+          </Button>
+          <Button type="button" variant="link" className="w-full text-muted-foreground" onClick={restart}>
+            {t('change_number')}
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   )
 }
@@ -146,15 +199,21 @@ function CardStep({ onDone }) {
   }
   return (
     <Card>
-      <h2 className="font-display text-xl font-semibold">{t('card_title')}</h2>
-      <p className="mt-1 text-sm text-ocean-700">{t('card_text')}</p>
-      <form onSubmit={submit} className="mt-4 space-y-3">
-        <label className="label" htmlFor="card">{t('card_label')}</label>
-        <input id="card" className="input font-mono" inputMode="numeric" value={number}
-          onChange={(e) => setNumber(e.target.value)} />
-        <ErrorNote error={error} />
-        <Button className="w-full" busy={busy}>{t('card_save')}</Button>
-      </form>
+      <CardHeader>
+        <IconBubble icon={CreditCard} />
+        <CardTitle className="pt-2 text-xl">{t('card_title')}</CardTitle>
+        <CardDescription>{t('card_text')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit} className="space-y-3">
+          <Label htmlFor="card">{t('card_label')}</Label>
+          <Input id="card" className="h-12 font-mono text-lg" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} />
+          <ErrorNote error={error} />
+          <Button size="lg" className="w-full" disabled={busy}>
+            {busy && <Loader2 className="animate-spin" />} {t('card_save')}
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   )
 }
@@ -164,15 +223,18 @@ function Rental({ station, me, reload, available }) {
   const last = !current && me.history.length ? me.history[0] : null
   if (current && current.status === 'armed') return <Armed rental={current} reload={reload} />
   if (current) return <Live rental={current} station={station} reload={reload} />
+  // End of the journey: receipt and return photo, then the referral, then the next rental.
+  const finished = Boolean(last && last.receipt)
   return (
     <>
-      {last && last.receipt && <Receipt rental={last} reload={reload} />}
-      <RentForm station={station} reload={reload} available={available} />
+      {finished && <Receipt rental={last} reload={reload} />}
+      {finished && <ReferralCard me={me} station={station} />}
+      <RentForm station={station} reload={reload} available={available} again={finished} />
     </>
   )
 }
 
-function RentForm({ station, reload, available }) {
+function RentForm({ station, reload, available, again }) {
   const { t } = useT()
   const [pack, setPack] = useState(session.pendingPack())
   const [showPack, setShowPack] = useState(Boolean(session.pendingPack()))
@@ -184,23 +246,28 @@ function RentForm({ station, reload, available }) {
     setBusy(false)
   }
   return (
-    <Card>
-      <h2 className="font-display text-xl font-semibold">{t('ready_title')}</h2>
-      <p className="mt-1 text-sm text-ocean-700">{t('ready_text')}</p>
-      {showPack ? (
-        <div className="mt-4">
-          <label className="label" htmlFor="pack">{t('pack_label')}</label>
-          <input id="pack" className="input uppercase" placeholder="MAIF-SURF" value={pack} onChange={(e) => setPack(e.target.value)} />
-        </div>
-      ) : (
-        <button className="mt-3 text-sm font-medium text-ocean-500 underline" onClick={() => setShowPack(true)}>
-          {t('have_pack')}
-        </button>
-      )}
-      <div className="mt-4"><ErrorNote error={error} /></div>
-      <Button className="mt-3 w-full text-lg" busy={busy} disabled={!available.length} onClick={rent}>
-        {available.length ? t('rent') : t('no_board_here')}
-      </Button>
+    <Card className={cn(!again && 'border-navy/30')}>
+      <CardHeader>
+        <CardTitle className="text-2xl">{t('ready_title')}</CardTitle>
+        <CardDescription>{t('ready_text')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {showPack ? (
+          <div className="space-y-2">
+            <Label htmlFor="pack">{t('pack_label')}</Label>
+            <Input id="pack" className="uppercase" placeholder="MAIF-SURF" value={pack} onChange={(e) => setPack(e.target.value)} />
+          </div>
+        ) : (
+          <button className="flex items-center gap-2 text-sm font-bold text-ocean-700 hover:underline" onClick={() => setShowPack(true)}>
+            <Tag className="h-4 w-4" /> {t('have_pack')}
+          </button>
+        )}
+        <ErrorNote error={error} />
+        <Button variant="sun" size="xl" className="w-full" disabled={busy || !available.length} onClick={rent}>
+          {busy ? <Loader2 className="animate-spin" /> : <WavesIcon className="!h-5 !w-5" />}
+          {available.length ? t('rent') : t('no_board_here')}
+        </Button>
+      </CardContent>
     </Card>
   )
 }
@@ -210,16 +277,22 @@ function Armed({ rental, reload }) {
   const [busy, setBusy] = useState(false)
   const cancel = async () => { setBusy(true); try { await api.cancelRental(rental.id) } finally { await reload(); setBusy(false) } }
   return (
-    <Card tone="ocean" className="text-center">
-      <div className="text-sm uppercase tracking-widest text-white/80">{t('yours')}</div>
-      <div className="mt-2 font-display text-4xl font-bold">{t('take_board', { board: rental.board_id })}</div>
-      <p className="mt-3 text-white/90">{t('take_text')}</p>
-      {rental.pack_code && <p className="mt-2 text-sm text-white/80">{t('pack_applied', { code: rental.pack_code })}</p>}
-      <div className="mt-4 flex items-center justify-center gap-2 text-sm text-white/80">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-white" /> {t('waiting_departure')}
+    <div className="rounded-3xl bg-navy p-6 text-center text-white shadow-soft">
+      <div className="text-xs font-bold uppercase tracking-widest text-lagoon">{t('yours')}</div>
+      <div className="mt-3 text-4xl font-extrabold leading-tight tracking-tight">
+        {t('take_board', { board: '' }).trim()} <span className="font-script font-normal text-sun">{rental.board_id}</span>
       </div>
-      <Button variant="light" className="mt-4 w-full" busy={busy} onClick={cancel}>{t('cancel')}</Button>
-    </Card>
+      <p className="mx-auto mt-4 max-w-xs text-white/80">{t('take_text')}</p>
+      {rental.pack_code && <Badge variant="sun" className="mt-3">{t('pack_applied', { code: rental.pack_code })}</Badge>}
+      <div className="mt-5 flex items-center justify-center gap-2 text-sm text-white/70">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lagoon opacity-75" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-lagoon" />
+        </span>
+        {t('waiting_departure')}
+      </div>
+      <Button variant="glass" size="lg" className="mt-5 w-full" disabled={busy} onClick={cancel}>{t('cancel')}</Button>
+    </div>
   )
 }
 
@@ -230,32 +303,32 @@ function Live({ rental, station, reload }) {
   const overdue = rental.status === 'not_returned'
   return (
     <>
-      <Card tone={overdue ? 'coral' : 'ocean'}>
-        <div className="flex items-center justify-between text-sm text-white/80">
-          <span>{overdue ? t('not_returned') : t('session_running')}</span>
-          <span className="font-mono">{rental.board_id}</span>
+      <div className={cn('rounded-3xl p-6 text-white shadow-soft', overdue ? 'bg-coral' : 'bg-navy')}>
+        <div className="flex items-center justify-between text-sm">
+          <span className="flex items-center gap-2 font-bold">
+            <Timer className="h-4 w-4" /> {overdue ? t('not_returned') : t('session_running')}
+          </span>
+          <Badge variant="outline" className="border-white/20 font-mono text-white">{rental.board_id}</Badge>
         </div>
-        <div className="mt-2 font-display text-5xl font-bold tabular-nums">{formatDuration(rental.duration_s)}</div>
-        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-xl bg-white/10 p-3">
-            <div className="text-white/70">{t('current_price')}</div>
-            <div className="text-xl font-semibold"><Money cents={live.charged_cents} /></div>
+        <div className="mt-4 text-5xl font-extrabold tabular-nums tracking-tight">{formatDuration(rental.duration_s)}</div>
+        <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+          <div className="rounded-2xl bg-white/10 p-3">
+            <div className="text-white/60">{t('current_price')}</div>
+            <div className="text-xl font-extrabold"><Money cents={live.charged_cents} /></div>
           </div>
-          <div className="rounded-xl bg-white/10 p-3">
-            <div className="text-white/70">{live.pack_minutes ? t('pack_covered') : t('wallet_used')}</div>
-            <div className="text-xl font-semibold">
+          <div className="rounded-2xl bg-white/10 p-3">
+            <div className="text-white/60">{live.pack_minutes ? t('pack_covered') : t('wallet_used')}</div>
+            <div className="text-xl font-extrabold text-sun">
               {live.pack_minutes ? `${live.pack_minutes} min` : <Money cents={live.wallet_used_cents} />}
             </div>
           </div>
         </div>
-        <p className="mt-3 text-sm text-white/90">{overdue ? t('overdue_text') : t('hang_back')}</p>
-      </Card>
+        <p className="mt-4 text-sm text-white/80">{overdue ? t('overdue_text') : t('hang_back')}</p>
+      </div>
       {manual ? (
         <ManualReturn rental={rental} station={station} reload={reload} />
       ) : (
-        <button className="w-full text-center text-sm text-ocean-700 underline" onClick={() => setManual(true)}>
-          {t('no_sms')}
-        </button>
+        <Button variant="link" className="h-auto w-full whitespace-normal text-muted-foreground" onClick={() => setManual(true)}>{t('no_sms')}</Button>
       )}
     </>
   )
@@ -275,15 +348,18 @@ function ManualReturn({ rental, station, reload }) {
   }
   return (
     <Card>
-      <h3 className="font-semibold">{t('backup_title')}</h3>
-      <p className="mt-1 text-sm text-ocean-700">{t('backup_text', { rack })}</p>
-      <Button className="mt-3 w-full" onClick={() => setScanning(true)}>{t('scan')}</Button>
-      <form onSubmit={(e) => { e.preventDefault(); submit(qr) }} className="mt-3 flex gap-2">
-        <input className="input font-mono" placeholder={rental.board_id} value={qr} onChange={(e) => setQr(e.target.value)}
-          aria-label={t('qr_manual')} />
-        <Button variant="ghost" busy={busy}>{t('return_board')}</Button>
-      </form>
-      <div className="mt-2"><ErrorNote error={error} /></div>
+      <CardHeader>
+        <CardTitle>{t('backup_title')}</CardTitle>
+        <CardDescription>{t('backup_text', { rack })}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Button size="lg" className="w-full" onClick={() => setScanning(true)}><QrCode /> {t('scan')}</Button>
+        <form onSubmit={(e) => { e.preventDefault(); submit(qr) }} className="flex gap-2">
+          <Input className="font-mono" placeholder={rental.board_id} value={qr} onChange={(e) => setQr(e.target.value)} aria-label={t('qr_manual')} />
+          <Button variant="outline" className="h-11" disabled={busy}>{t('return_board')}</Button>
+        </form>
+        <ErrorNote error={error} />
+      </CardContent>
       {scanning && (
         <QrScanner expect="board" onClose={() => setScanning(false)}
           onResult={(r) => { setScanning(false); setQr(r.id); submit(r.id) }} />
@@ -301,28 +377,33 @@ function Receipt({ rental, reload }) {
   }[r.deposit_status] || t('deposit_pending')
   return (
     <Card>
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-xl font-semibold">{t('receipt_title')}</h2>
-        <span className="rounded-full bg-ocean-100 px-2 py-1 text-xs font-semibold text-ocean-700">{t('receipt')}</span>
-      </div>
-      <dl className="mt-3 space-y-1 text-sm">
-        <Row label={t('board')} value={rental.board_id} />
-        <Row label={t('duration')} value={r.duration_label} />
-        {r.pack_minutes > 0 && <Row label={t('pack_line')} value={`${r.pack_minutes} min`} />}
-        {r.wallet_used_cents > 0 && <Row label={t('wallet_line')} value={<>- <Money cents={r.wallet_used_cents} /></>} />}
-        <Row label={t('paid')} value={<strong><Money cents={r.charged_cents} /></strong>} />
-        <Row label={t('deposit')} value={deposit} />
-        {rental.return_mode === 'manual' && <Row label={t('return_qr')} value={t('by_qr')} />}
-      </dl>
-      <PhotoReturn rental={rental} reload={reload} />
+      <CardHeader className="flex-row items-center gap-3 space-y-0">
+        <IconBubble icon={CheckCircle2} tone="ocean" />
+        <div>
+          <CardTitle className="text-xl">{t('receipt_title')}</CardTitle>
+          <CardDescription>{t('receipt')}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <dl className="divide-y rounded-xl border text-sm">
+          <Row label={t('board')} value={<span className="font-mono">{rental.board_id}</span>} />
+          <Row label={t('duration')} value={r.duration_label} />
+          {r.pack_minutes > 0 && <Row label={t('pack_line')} value={`${r.pack_minutes} min`} />}
+          {r.wallet_used_cents > 0 && <Row label={t('wallet_line')} value={<>- <Money cents={r.wallet_used_cents} /></>} />}
+          <Row label={t('deposit')} value={deposit} />
+          {rental.return_mode === 'manual' && <Row label={t('return_qr')} value={t('by_qr')} />}
+          <Row label={t('paid')} value={<span className="text-lg font-extrabold"><Money cents={r.charged_cents} /></span>} />
+        </dl>
+        <PhotoReturn rental={rental} reload={reload} />
+      </CardContent>
     </Card>
   )
 }
 
 function Row({ label, value }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-sand-200 py-1 last:border-0">
-      <dt className="text-ocean-700">{label}</dt><dd className="text-right">{value}</dd>
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+      <dt className="text-muted-foreground">{label}</dt><dd className="text-right font-bold">{value}</dd>
     </div>
   )
 }
@@ -337,6 +418,7 @@ export function PhotoReturn({ rental, reload }) {
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const inputId = `photo-${rental.id}`
 
   const choose = async (e) => {
     const f = e.target.files?.[0]
@@ -358,43 +440,58 @@ export function PhotoReturn({ rental, reload }) {
     setBusy(false)
   }
   if (!result && rental.photo_credited) {
-    return <p className="mt-4 rounded-xl bg-ocean-50 p-3 text-sm font-semibold text-ocean-700">{t('photo_done')}</p>
+    return (
+      <p className="mt-4 flex items-center gap-2 rounded-xl bg-foam p-3 text-sm font-bold text-ocean-700">
+        <CheckCircle2 className="h-4 w-4 shrink-0" /> {t('photo_done')}
+      </p>
+    )
   }
   if (result) {
     return (
-      <div className="mt-4 rounded-xl bg-ocean-50 p-3 text-sm">
-        <p className="font-semibold text-ocean-700">{result.message}</p>
-        <p className="mt-1 text-ocean-700/80">
+      <div className="mt-4 rounded-xl bg-foam p-3 text-sm">
+        <p className="font-bold text-ocean-700">{result.message}</p>
+        <p className="mt-1 text-muted-foreground">
           {t('diagnosis')} : {result.damage_detected ? t('damage_found') : t('no_damage')}
-          {' · '}{t('footprint')} {result.sha256.slice(0, 10)}…
+          {' · '}{t('footprint')} <span className="font-mono">{result.sha256.slice(0, 10)}…</span>
         </p>
       </div>
     )
   }
   return (
-    <div className="mt-4 rounded-xl border border-dashed border-cork-400 bg-sand-50 p-3">
-      <p className="text-sm font-semibold">{t('photo_title')}</p>
-      <p className="text-xs text-ocean-700/80">{t('photo_text')}</p>
-      <input id={`photo-${rental.id}`} type="file" accept="image/*" capture="environment" className="hidden" onChange={choose} />
-      <Button variant="ghost" className="mt-3 w-full" onClick={() => document.getElementById(`photo-${rental.id}`).click()}>
-        {file ? t('retake_photo') : t('take_photo')}
-      </Button>
+    <div className="mt-4 rounded-2xl border-2 border-dashed border-sun/60 bg-sun/5 p-4">
+      <div className="flex items-start gap-3">
+        <IconBubble icon={Camera} tone="sun" />
+        <div>
+          <p className="font-bold leading-snug">{t('photo_title')}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t('photo_text')}</p>
+        </div>
+      </div>
+      <input id={inputId} type="file" accept="image/*" capture="environment" className="hidden" onChange={choose} />
       {preview && <img src={preview} alt="" className="mt-3 max-h-48 w-full rounded-xl object-cover" />}
-      {qr && <p className="mt-2 text-sm font-medium text-ocean-700">✓ {t('qr_found', { board: qr })}</p>}
+      {qr && <p className="mt-2 flex items-center gap-1 text-sm font-bold text-ocean-700"><Check className="h-4 w-4" /> {t('qr_found', { board: qr })}</p>}
       {qr === '' && (
-        <div className="mt-2">
-          <p className="text-sm text-coral-600">{t('qr_not_found')}</p>
-          <input className="input mt-2 font-mono" placeholder={rental.board_id} value={manualQr}
+        <div className="mt-2 space-y-2">
+          <p className="text-sm text-coral">{t('qr_not_found')}</p>
+          <Input className="font-mono" placeholder={rental.board_id} value={manualQr}
             onChange={(e) => setManualQr(e.target.value)} aria-label={t('qr_manual')} />
         </div>
       )}
-      <div className="mt-2"><ErrorNote error={error} /></div>
-      <Button variant="cork" className="mt-2 w-full" busy={busy} disabled={!file} onClick={send}>{t('send_photo')}</Button>
+      <ErrorNote error={error} className="mt-2" />
+      <div className="mt-3 grid gap-2">
+        <Button variant="outline" onClick={() => document.getElementById(inputId).click()}>
+          <Camera /> {file ? t('retake_photo') : t('take_photo')}
+        </Button>
+        {file && (
+          <Button variant="sun" disabled={busy} onClick={send}>
+            {busy && <Loader2 className="animate-spin" />} {t('send_photo')}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
 
-function WalletCard({ me, station }) {
+function ReferralCard({ me, station }) {
   const { t } = useT()
   const [copied, setCopied] = useState(false)
   const link = `${window.location.origin}/s/${station}?ref=${me.referral_code}`
@@ -406,20 +503,19 @@ function WalletCard({ me, station }) {
     } catch { /* share sheet closed */ }
   }
   return (
-    <Card tone="sand">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="text-sm text-ocean-700">{t('wallet')}</div>
-          <div className="font-display text-3xl font-bold"><Money cents={me.wallet_cents} /></div>
-        </div>
-        <div className="text-right text-xs text-ocean-700/80">{t('wallet_next')}</div>
+    <div className="rounded-3xl bg-sun p-5 text-navy shadow-soft">
+      <div className="flex items-center gap-3">
+        <IconBubble icon={Gift} tone="navy" />
+        <div className="text-xl font-extrabold leading-tight">{t('referral_end_title')}</div>
       </div>
-      <div className="mt-4 rounded-xl bg-white p-3">
-        <div className="text-sm text-ocean-700">{t('my_referral')}</div>
-        <div className="font-mono text-2xl font-bold tracking-wider text-cork-600">{me.referral_code}</div>
-        <p className="mt-1 text-xs text-ocean-700/80">{t('referral_text')}</p>
-        <Button variant="ghost" className="mt-3 w-full" onClick={share}>{copied ? t('link_copied') : t('share_code')}</Button>
+      <p className="mt-3 text-sm text-navy/80">{t('referral_text')}</p>
+      <div className="mt-4 rounded-2xl bg-white/70 p-4">
+        <div className="text-xs font-bold uppercase tracking-wider text-navy/60">{t('my_referral')}</div>
+        <div className="font-mono text-2xl font-extrabold tracking-wider">{me.referral_code}</div>
+        <Button onClick={share} className="mt-3 w-full">
+          {copied ? <Check /> : <Share2 />} {copied ? t('link_copied') : t('share_code')}
+        </Button>
       </div>
-    </Card>
+    </div>
   )
 }

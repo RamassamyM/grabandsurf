@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { api, session } from '../../api.js'
-import QrScanner from '../../components/QrScanner.jsx'
-import { Button, Card, ErrorNote, Logo, Spinner, StatusBadge, TxLink, usePoll } from '../../components/ui.jsx'
-import { LangSwitch, useT } from '../../i18n.jsx'
+import { useParams } from 'react-router-dom'
+import {
+  AlertTriangle, BadgeCheck, ExternalLink, Fingerprint, Loader2, Play, QrCode, Share2, Sparkles, Undo2,
+} from 'lucide-react'
+import { api, session } from '@/api.js'
+import QrScanner from '@/components/QrScanner.jsx'
+import { CustomerHeader } from '@/components/Layout.jsx'
+import { ErrorNote, IconBubble, Spinner, StatusBadge, TxLink, usePoll } from '@/components/common.jsx'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useT } from '@/i18n.jsx'
+import { cn } from '@/lib/utils'
 import { PhotoReturn } from '../client/StationPage.jsx'
 
 const ZONES = ['nose', 'tail', 'rail', 'fin', 'deck']
@@ -23,13 +31,13 @@ export default function PassportPage() {
 
   if (error && !data) {
     return (
-      <main className="mx-auto max-w-md px-4 py-10">
-        <div className="flex items-center justify-between"><Logo /><LangSwitch /></div>
-        <Card className="mt-6"><ErrorNote error={error.status === 404 ? t('unknown_board') : error.message} /></Card>
-      </main>
+      <div className="min-h-dvh">
+        <CustomerHeader><h1 className="text-3xl font-extrabold">{t('passport')}</h1></CustomerHeader>
+        <main className="mx-auto max-w-md px-4"><ErrorNote error={error.status === 404 ? t('unknown_board') : error.message} /></main>
+      </div>
     )
   }
-  if (!data) return <main className="mx-auto max-w-md px-4"><Spinner label={t('loading')} /></main>
+  if (!data) return <Spinner label={t('loading')} className="min-h-dvh" />
 
   const b = data.board
   const mine = me.data?.current_rental?.board_id === b.id ? me.data.current_rental : null
@@ -37,113 +45,121 @@ export default function PassportPage() {
 
   return (
     <div className="min-h-dvh pb-16">
-      <header className="cork-texture px-4 pb-10 pt-6 text-white">
-        <div className="mx-auto max-w-md">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="inline-block rounded-lg bg-white/90 px-2 py-1"><Logo small /></Link>
-            <LangSwitch />
-          </div>
-          <div className="mt-8 text-sm uppercase tracking-widest text-white/80">{t('passport')}</div>
-          <h1 className="font-display text-5xl font-bold">{b.id}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <StatusBadge status={b.status} label={t(`status_${b.status}`)} />
-            <span className="text-white/90">{t('material')} · {t('base', { id: b.home_station })} · {t('nft', { id: b.token_id })}</span>
-          </div>
+      <CustomerHeader>
+        <div className="text-xs font-bold uppercase tracking-widest text-lagoon">{t('passport')}</div>
+        <h1 className="mt-1 font-script text-6xl leading-tight text-sun">{b.id}</h1>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <StatusBadge status={b.status} label={t(`status_${b.status}`)} />
+          <span className="text-white/70">{t('material')} · {t('base', { id: b.home_station })} · {t('nft', { id: b.token_id })}</span>
         </div>
-      </header>
+      </CustomerHeader>
 
-      <main className="mx-auto -mt-5 max-w-md space-y-4 px-4">
+      <main className="mx-auto max-w-md space-y-4 px-4">
         <div className="grid grid-cols-3 gap-3">
-          <Stat value={data.sessions} label={t('sessions')} />
-          <Stat value={data.minutes_surfed} label={t('minutes_surfed')} />
-          <Stat value={data.repairs} label={t('repairs')} />
+          <MiniStat value={data.sessions} label={t('sessions')} />
+          <MiniStat value={data.minutes_surfed} label={t('minutes_surfed')} />
+          <MiniStat value={data.repairs} label={t('repairs')} />
         </div>
+
+        {mine && mine.status !== 'armed' && <ReturnHere rental={mine} board={b.id} reload={me.reload} />}
+        {!mine && lastMine && lastMine.status === 'returned' && !lastMine.photo_credited && (
+          <Card><CardContent className="pt-1"><PhotoReturn rental={lastMine} reload={me.reload} /></CardContent></Card>
+        )}
 
         {data.sponsorship && <SponsorCard sp={data.sponsorship} />}
 
         {data.ambassador && (
-          <Card tone="ocean">
-            <div className="text-sm text-white/70">{t('ambassador')}</div>
-            <div className="mt-1 font-display text-2xl font-semibold">{data.ambassador.name}</div>
-            <div className="text-sm text-white/80">{data.ambassador.tagline}</div>
-            <p className="mt-3 italic text-white/95">« {data.ambassador.story} »</p>
-            <p className="mt-2 text-xs text-white/60">{t('fictional')}</p>
-          </Card>
-        )}
-
-        {mine && mine.status !== 'armed' && <ReturnHere rental={mine} board={b.id} reload={me.reload} />}
-        {!mine && lastMine && lastMine.status === 'returned' && !lastMine.photo_credited && (
-          <Card><PhotoReturn rental={lastMine} reload={me.reload} /></Card>
+          <div className="rounded-3xl bg-navy p-5 text-white shadow-soft">
+            <div className="text-xs font-bold uppercase tracking-widest text-lagoon">{t('ambassador')}</div>
+            <div className="mt-1 text-2xl font-extrabold">{data.ambassador.name}</div>
+            <div className="text-sm text-white/70">{data.ambassador.tagline}</div>
+            <p className="mt-3 font-script text-xl leading-snug text-sun">« {data.ambassador.story} »</p>
+            <p className="mt-2 text-xs text-white/50">{t('fictional')}</p>
+          </div>
         )}
 
         <Card>
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-xl font-semibold">{t('life_log')}</h2>
-            <span className="text-xs text-ocean-700/70">{data.chain.label}</span>
-          </div>
-          <p className="mt-1 text-xs text-ocean-700/80">{t('life_log_text')}</p>
-          {data.history.length === 0 && <p className="mt-4 text-sm text-ocean-700/70">{t('life_log_empty')}</p>}
-          <SyncLine sync={data.sync} />
-          <ol className="mt-4 space-y-3 border-l-2 border-cork-300 pl-4">
-            {data.history.map((h, i) => <HistoryRow key={`${h.tx_hash || 'p'}-${h.event_type}-${i}`} h={h} />)}
-          </ol>
-          {data.chain.contract_url && (
-            <a className="mt-4 block text-sm text-ocean-500 underline" href={data.chain.contract_url} target="_blank" rel="noreferrer">
-              {t('see_registry')} ↗
-            </a>
-          )}
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-xl">{t('life_log')}</CardTitle>
+              <Badge variant="muted">{data.chain.label}</Badge>
+            </div>
+            <CardDescription>{t('life_log_text')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SyncLine sync={data.sync} />
+            {data.history.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{t('life_log_empty')}</p>}
+            <ol className="relative mt-5 space-y-5 border-l-2 border-foam-200 pl-5">
+              {data.history.map((h, i) => <HistoryRow key={`${h.tx_hash || 'p'}-${h.event_type}-${i}`} h={h} />)}
+            </ol>
+            {data.chain.contract_url && (
+              <a className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-ocean-700 hover:underline"
+                href={data.chain.contract_url} target="_blank" rel="noreferrer">
+                {t('see_registry')} <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
+          </CardContent>
         </Card>
 
         <PhotoCheck history={data.history} />
-        <ShareCard board={b.id} />
+        <ShareButton board={b.id} />
         <DamageCard board={b.id} />
       </main>
     </div>
   )
 }
 
-const STATUS_TONES = {
-  verified: 'bg-ocean-100 text-ocean-700',
-  pending: 'bg-sand-200 text-ocean-700',
-  reading: 'bg-sand-200 text-ocean-700',
-  simulation: 'bg-sand-200 text-ocean-700/80',
-  skipped: 'bg-amber-100 text-amber-800',
-  rejected: 'bg-coral-400/20 text-coral-600',
-  missing: 'bg-coral-400/20 text-coral-600',
+function MiniStat({ value, label }) {
+  return (
+    <div className="rounded-2xl border bg-card p-3 text-center shadow-soft">
+      <div className="text-3xl font-extrabold tabular-nums">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+    </div>
+  )
+}
+
+const STATUS_VARIANTS = {
+  verified: 'ocean',
+  pending: 'muted',
+  reading: 'muted',
+  simulation: 'muted',
+  skipped: 'sun',
+  rejected: 'coral',
+  missing: 'coral',
 }
 
 function HistoryRow({ h }) {
   const { t } = useT()
   const d = h.details || {}
-  const dot = h.status === 'verified' ? 'bg-ocean-500' : h.event_type === 'CORRECTION' ? 'bg-coral-500' : 'bg-cork-400'
+  const dot = h.status === 'verified' ? 'bg-ocean' : h.event_type === 'CORRECTION' ? 'bg-coral' : 'bg-sun'
   const short = (x) => (x ? `${x.slice(0, 10)}…${x.slice(-6)}` : '')
   return (
     <li className="relative">
-      <span className={`absolute -left-[23px] top-1.5 h-3 w-3 rounded-full border-2 border-white ${dot}`} />
+      <span className={cn('absolute -left-[27px] top-1 h-3.5 w-3.5 rounded-full border-[3px] border-white', dot)} />
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-medium">{t(`ev_${h.event_type}`)}</span>
-        <span className="text-xs text-ocean-700/70">{t('station_t', { station: h.station || '-', t: Math.round(h.t) })}</span>
+        <span className="font-bold">{t(`ev_${h.event_type}`)}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{t('station_t', { station: h.station || '-', t: Math.round(h.t) })}</span>
       </div>
-      <div className="mt-0.5 flex flex-wrap items-center gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_TONES[h.status] || 'bg-sand-200'}`}>
-          {h.status === 'verified' ? '✓ ' : ''}{t(`st_${h.status}`)}
-        </span>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <Badge variant={STATUS_VARIANTS[h.status] || 'muted'} className="gap-1 text-[11px]">
+          {h.status === 'verified' && <BadgeCheck className="h-3 w-3" />}{t(`st_${h.status}`)}
+        </Badge>
         {h.tx_hash && <TxLink hash={h.tx_hash} url={h.url} />}
       </div>
       {(d.duration_label || d.offered_by) && (
-        <div className="mt-1 text-xs text-ocean-700/80">
+        <div className="mt-1 text-xs text-muted-foreground">
           {[d.duration_label && t('session_of', { duration: d.duration_label }), d.offered_by && t('offered_by', { partner: d.offered_by })]
             .filter(Boolean).join(' · ')}
         </div>
       )}
       {d.photo_sha256 && (
-        <div className="mt-1 text-xs text-ocean-700/80">
+        <div className="mt-1 text-xs text-muted-foreground">
           {t('photo_print')} <span className="font-mono">{short(d.photo_sha256)}</span>
           {d.signer && <> · {t('signed_by', { signer: short(d.signer) })}</>}
         </div>
       )}
       {h.event_type === 'CORRECTION' && (
-        <div className="mt-1 text-xs text-ocean-700/80">
+        <div className="mt-1 text-xs text-muted-foreground">
           {d.corrected_index !== undefined && d.corrected_index !== null && <>{t('correction_of', { index: d.corrected_index })} · </>}
           {d.reason}
         </div>
@@ -160,7 +176,7 @@ function SyncLine({ sync }) {
   else if (sync.source === 'database') text = t('chain_db')
   else if (sync.synced) text = t('chain_synced')
   else text = t('chain_reading', { scanned: sync.scanned_to || 0, latest: sync.latest || '?' })
-  return <p className="mt-2 rounded-lg bg-sand-50 px-3 py-1.5 text-xs text-ocean-700/80">{text}</p>
+  return <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">{text}</p>
 }
 
 async function sha256Hex(file) {
@@ -182,17 +198,22 @@ function PhotoCheck({ history }) {
   }
   return (
     <Card>
-      <h3 className="font-semibold">{t('verify_title')}</h3>
-      <p className="mt-1 text-xs text-ocean-700/80">{t('verify_text')}</p>
-      <label className="mt-3 inline-flex min-h-[44px] cursor-pointer items-center rounded-xl border border-ocean-100 px-4 font-semibold text-ocean-700 hover:bg-ocean-50">
-        {t('verify_pick')}
-        <input type="file" accept="image/*" className="hidden" onChange={(e) => check(e.target.files?.[0])} />
-      </label>
-      {result && (
-        <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-medium ${result.ok ? 'bg-ocean-100 text-ocean-700' : 'bg-coral-400/15 text-coral-600'}`}>
-          {result.ok ? '✓ ' : ''}{result.text}
-        </p>
-      )}
+      <CardHeader className="flex-row items-start gap-3 space-y-0">
+        <IconBubble icon={Fingerprint} tone="foam" />
+        <div className="space-y-1">
+          <CardTitle>{t('verify_title')}</CardTitle>
+          <CardDescription>{t('verify_text')}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <input id="verify-photo" type="file" accept="image/*" className="hidden" onChange={(e) => check(e.target.files?.[0])} />
+        <Button variant="outline" className="w-full" onClick={() => document.getElementById('verify-photo').click()}>{t('verify_pick')}</Button>
+        {result && (
+          <p className={cn('mt-3 rounded-xl px-3 py-2 text-sm font-bold', result.ok ? 'bg-foam text-ocean-700' : 'bg-coral-50 text-coral')}>
+            {result.text}
+          </p>
+        )}
+      </CardContent>
     </Card>
   )
 }
@@ -211,22 +232,24 @@ function SponsorCard({ sp }) {
     ? t('sponsor_period', { start: formatDay(sp.start_date, lang), end: formatDay(sp.end_date, lang) })
     : t('sponsor_since', { start: formatDay(sp.start_date, lang) })
   return (
-    <Card className="overflow-hidden p-0">
-      {sp.design_url && <img src={sp.design_url} alt={t('design_by', { artist: sp.artist_name })} className="max-h-80 w-full bg-sand-100 object-contain" />}
-      <div className="space-y-3 p-4">
+    <Card className="overflow-hidden">
+      {sp.design_url && <img src={sp.design_url} alt={t('design_by', { artist: sp.artist_name })} className="max-h-80 w-full bg-foam object-contain" />}
+      <CardContent className="space-y-4 pt-5">
         <div>
-          <div className="text-xs uppercase tracking-widest text-cork-600">{t('design_by', { artist: '' }).trim()}</div>
-          <div className="font-display text-2xl font-semibold">{sp.artist_name}</div>
-          {sp.artist_bio && <p className="mt-1 text-sm text-ocean-700">{sp.artist_bio}</p>}
+          <div className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-cork-700">
+            <Sparkles className="h-3.5 w-3.5" /> {t('design_by', { artist: '' }).trim()}
+          </div>
+          <div className="text-2xl font-extrabold">{sp.artist_name}</div>
+          {sp.artist_bio && <p className="mt-1 text-sm text-muted-foreground">{sp.artist_bio}</p>}
         </div>
         {images.length > 0 && (
           <div>
-            <div className="text-sm font-semibold">{t('gallery')}</div>
+            <div className="text-sm font-bold">{t('gallery')}</div>
             <div className="mt-2 flex snap-x gap-2 overflow-x-auto pb-1">
               {images.map((m) => (
                 <figure key={m.id} className="w-40 shrink-0 snap-start">
                   <img src={m.url} alt={m.caption || sp.artist_name} className="h-32 w-40 rounded-xl object-cover" />
-                  {m.caption && <figcaption className="mt-1 text-xs text-ocean-700/80">{m.caption}</figcaption>}
+                  {m.caption && <figcaption className="mt-1 text-xs text-muted-foreground">{m.caption}</figcaption>}
                 </figure>
               ))}
             </div>
@@ -234,40 +257,31 @@ function SponsorCard({ sp }) {
         )}
         {videos.map((m) => (
           <a key={m.id} href={m.url} target="_blank" rel="noreferrer"
-            className="flex items-center gap-2 rounded-xl bg-sand-50 px-3 py-2 text-sm font-medium text-ocean-700">
-            <span aria-hidden>▶</span> {m.caption || t('watch_video')} ↗
+            className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm font-bold hover:bg-accent">
+            <Play className="h-4 w-4 text-ocean" /> {m.caption || t('watch_video')} <ExternalLink className="ml-auto h-3.5 w-3.5" />
           </a>
         ))}
-        <div className="rounded-xl bg-ocean-500 p-3 text-white">
-          <div className="font-semibold">{t('sponsored_by', { sponsor: sp.sponsor_name })}</div>
-          <div className="text-xs text-white/80">{period}</div>
-          {sp.message && <p className="mt-2 text-sm italic">« {sp.message} »</p>}
+        <div className="rounded-2xl bg-navy p-4 text-white">
+          <div className="font-bold">{t('sponsored_by', { sponsor: sp.sponsor_name })}</div>
+          <div className="text-xs text-white/60">{period}</div>
+          {sp.message && <p className="mt-2 font-script text-lg text-sun">« {sp.message} »</p>}
           {sp.sponsor_url && (
-            <a href={sp.sponsor_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold underline">
-              {t('visit_sponsor', { sponsor: sp.sponsor_name })} ↗
+            <a href={sp.sponsor_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-lagoon hover:underline">
+              {t('visit_sponsor', { sponsor: sp.sponsor_name })} <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
         </div>
         {sp.chain?.tx_hash && (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-ocean-700/80">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {t('on_chain_art')} <TxLink hash={sp.chain.tx_hash} url={sp.chain.url} />
           </div>
         )}
-      </div>
+      </CardContent>
     </Card>
   )
 }
 
-function Stat({ value, label }) {
-  return (
-    <Card className="text-center">
-      <div className="font-display text-3xl font-bold text-ocean-700">{value}</div>
-      <div className="text-xs text-ocean-700/80">{label}</div>
-    </Card>
-  )
-}
-
-function ShareCard({ board }) {
+function ShareButton({ board }) {
   const { t } = useT()
   const [done, setDone] = useState(false)
   const share = async () => {
@@ -277,7 +291,7 @@ function ShareCard({ board }) {
       else { await navigator.clipboard.writeText(`${text} ${window.location.href}`); setDone(true) }
     } catch { /* closed */ }
   }
-  return <Button variant="cork" className="w-full" onClick={share}>{done ? t('link_copied') : t('share_story')}</Button>
+  return <Button variant="sun" size="lg" className="w-full" onClick={share}><Share2 /> {done ? t('link_copied') : t('share_story')}</Button>
 }
 
 function ReturnHere({ rental, board, reload }) {
@@ -292,22 +306,26 @@ function ReturnHere({ rental, board, reload }) {
     try { await api.manualReturn(rental.id, rack, board); setDone(true); if (reload) await reload() } catch (err) { setError(err.message) }
     setBusy(false)
   }
-  if (done) return <Card tone="sand"><p className="font-semibold">{t('returned_ok')}</p></Card>
+  if (done) return <p className="rounded-2xl bg-foam p-4 font-bold text-ocean-700">{t('returned_ok')}</p>
   return (
-    <Card tone="sand">
-      <h3 className="font-semibold">{t('return_here')}</h3>
-      {rack ? (
-        <>
-          <p className="mt-1 text-sm text-ocean-700">{t('return_here_text', { rack })}</p>
-          <div className="mt-2"><ErrorNote error={error} /></div>
-          <Button className="mt-3 w-full" busy={busy} onClick={submit}>{t('return_confirm')}</Button>
-        </>
-      ) : (
-        <>
-          <p className="mt-1 text-sm text-ocean-700">{t('return_scan_rack')}</p>
-          <Button className="mt-3 w-full" onClick={() => setScanning(true)}>{t('scan')}</Button>
-        </>
-      )}
+    <Card className="border-navy/30">
+      <CardHeader className="flex-row items-start gap-3 space-y-0">
+        <IconBubble icon={Undo2} />
+        <div className="space-y-1">
+          <CardTitle>{t('return_here')}</CardTitle>
+          <CardDescription>{rack ? t('return_here_text', { rack }) : t('return_scan_rack')}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ErrorNote error={error} />
+        {rack ? (
+          <Button size="lg" className="w-full" disabled={busy} onClick={submit}>
+            {busy && <Loader2 className="animate-spin" />} {t('return_confirm')}
+          </Button>
+        ) : (
+          <Button size="lg" className="w-full" onClick={() => setScanning(true)}><QrCode /> {t('scan')}</Button>
+        )}
+      </CardContent>
       {scanning && (
         <QrScanner expect="rack" onClose={() => setScanning(false)}
           onResult={(r) => { setScanning(false); session.rememberRack(r.id); setRack(r.id) }} />
@@ -329,24 +347,35 @@ function DamageCard({ board }) {
     try { setMsg((await api.reportDamage(board, zone)).message) } catch (err) { setError(err.message) }
     setBusy(false)
   }
-  if (!open) return <button className="w-full text-center text-sm text-ocean-700 underline" onClick={() => setOpen(true)}>{t('report_damage')}</button>
+  if (!open) {
+    return (
+      <Button variant="link" className="w-full text-muted-foreground" onClick={() => setOpen(true)}>
+        <AlertTriangle /> {t('report_damage')}
+      </Button>
+    )
+  }
   return (
     <Card>
-      <h3 className="font-semibold">{t('report_damage')}</h3>
-      {msg ? <p className="mt-2 text-sm">{msg}</p> : (
-        <>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {ZONES.map((z) => (
-              <button key={z} onClick={() => setZone(z)}
-                className={`rounded-xl border px-3 py-2 text-sm ${zone === z ? 'border-ocean-500 bg-ocean-50 font-semibold' : 'border-sand-300'}`}>
-                {t(`zone_${z}`)}
-              </button>
-            ))}
+      <CardHeader><CardTitle>{t('report_damage')}</CardTitle></CardHeader>
+      <CardContent>
+        {msg ? <p className="text-sm">{msg}</p> : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              {ZONES.map((z) => (
+                <button key={z} onClick={() => setZone(z)}
+                  className={cn('rounded-xl border px-3 py-2.5 text-sm font-bold transition',
+                    zone === z ? 'border-navy bg-navy text-white' : 'bg-white hover:bg-muted')}>
+                  {t(`zone_${z}`)}
+                </button>
+              ))}
+            </div>
+            <ErrorNote error={error} />
+            <Button variant="destructive" size="lg" className="w-full" disabled={busy} onClick={send}>
+              {busy && <Loader2 className="animate-spin" />} {t('send_report')}
+            </Button>
           </div>
-          <div className="mt-2"><ErrorNote error={error} /></div>
-          <Button variant="danger" className="mt-3 w-full" busy={busy} onClick={send}>{t('send_report')}</Button>
-        </>
-      )}
+        )}
+      </CardContent>
     </Card>
   )
 }

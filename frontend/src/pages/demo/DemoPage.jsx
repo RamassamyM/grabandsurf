@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { api, session } from '../../api.js'
-import { Logo, usePoll } from '../../components/ui.jsx'
-import { LangSwitch, useT } from '../../i18n.jsx'
+import { Lock, RotateCw, Smartphone } from 'lucide-react'
+import { api, session } from '@/api.js'
+import { Logo, usePoll } from '@/components/common.jsx'
+import { LangSwitch, useT } from '@/i18n.jsx'
 
 const DEFAULT_RACKS = ['A', 'B', 'C'].map((id) => ({ id, path: `/s/${id}`, label: `Rack ${id}` }))
 const DEFAULT_BOARDS = [1, 2, 3, 4, 5, 6].map((n) => ({ id: `korko-0${n}`, path: `/p/korko-0${n}`, label: `korko-0${n}` }))
@@ -34,18 +35,18 @@ export default function DemoPage() {
   const exit = () => navigate(shown)
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-ocean-900 via-ocean-700 to-cork-600 px-4 py-6">
+    <div className="min-h-dvh bg-navy px-4 py-6">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
-        <Link to="/" className="rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
+        <Link to="/" aria-label="Grab&Surf"><Logo className="h-12" /></Link>
         <div className="flex items-center gap-3">
-          <LangSwitch />
+          <LangSwitch dark />
           <PhoneSwitchButton on onClick={exit} />
         </div>
       </div>
-      <p className="mx-auto mt-3 max-w-5xl text-center text-sm text-white/80">{t('demo_title')}</p>
+      <p className="mx-auto mt-3 max-w-5xl text-center font-script text-2xl text-sun">{t('demo_title')}</p>
 
       <div className="mt-4 flex justify-center">
-        <div className="relative h-[780px] max-h-[calc(100dvh-8rem)] min-h-[560px] w-[380px] max-w-full rounded-[3rem] border-[12px] border-black bg-black shadow-2xl">
+        <div className="relative h-[780px] max-h-[calc(100dvh-8rem)] min-h-[560px] w-[380px] max-w-full rounded-[3rem] border-[12px] border-black bg-black shadow-[0_30px_80px_-20px_rgba(27,168,200,.45)]">
           <div className="absolute left-1/2 top-0 z-20 h-6 w-32 -translate-x-1/2 rounded-b-2xl bg-black" />
           <div className="flex h-full flex-col overflow-hidden rounded-[2.2rem] bg-white">
             <StatusBar />
@@ -68,11 +69,11 @@ export function PhoneSwitchButton({ on = false, onClick }) {
   const { t } = useT()
   return (
     <button onClick={onClick} role="switch" aria-checked={on}
-      className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm font-semibold text-ocean-700 shadow-card">
-      <span className={`relative h-5 w-9 rounded-full transition ${on ? 'bg-ocean-500' : 'bg-sand-300'}`}>
+      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold text-white ring-1 ring-white/15 ${on ? 'bg-white/10 hover:bg-white/20' : 'bg-navy shadow-lg hover:bg-navy-800'}`}>
+      <span className={`relative h-5 w-9 rounded-full transition ${on ? 'bg-sun' : 'bg-white/30'}`}>
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-      📱 {t('demo_phone')}
+      <Smartphone className="h-4 w-4" /> {t('demo_phone')}
     </button>
   )
 }
@@ -91,9 +92,9 @@ function StatusBar() {
   }, [])
   const hh = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   return (
-    <div className="flex h-8 shrink-0 items-center justify-between px-6 pt-1 text-xs font-semibold text-ocean-900">
+    <div className="flex h-8 shrink-0 items-center justify-between px-6 pt-1 text-xs font-bold text-navy">
       <span>{hh}</span>
-      <span className="flex items-center gap-1" aria-hidden>▂▄▆ <span className="rounded-sm border border-ocean-900 px-1 text-[9px]">87</span></span>
+      <span className="flex items-center gap-1" aria-hidden>▂▄▆ <span className="rounded-sm border border-navy px-1 text-[9px]">87</span></span>
     </div>
   )
 }
@@ -110,12 +111,12 @@ function Browser({ url, shown, setShown }) {
   }
   return (
     <>
-      <div className="flex shrink-0 items-center gap-2 border-b border-sand-200 bg-sand-50 px-3 py-2">
-        <span className="text-xs text-ocean-700/60" aria-hidden>🔒</span>
-        <div className="min-w-0 flex-1 truncate rounded-full bg-white px-3 py-1 font-mono text-[11px] text-ocean-700 shadow-inner">
+      <div className="flex shrink-0 items-center gap-2 border-b bg-muted px-3 py-2">
+        <Lock className="h-3 w-3 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 flex-1 truncate rounded-full bg-white px-3 py-1 font-mono text-[11px] text-muted-foreground shadow-inner">
           {window.location.host}{shown}
         </div>
-        <button className="text-sm text-ocean-700" aria-label="Reload" onClick={() => setKey((k) => k + 1)}>↻</button>
+        <button className="text-muted-foreground" aria-label="Reload" onClick={() => setKey((k) => k + 1)}><RotateCw className="h-3.5 w-3.5" /></button>
       </div>
       <iframe key={key} ref={frame} src={url} title="Grab&Surf" onLoad={onLoad} className="min-h-0 w-full flex-1 border-0"
         allow="camera; clipboard-write" />
@@ -134,7 +135,7 @@ function Camera({ onScan }) {
     setTimeout(() => { setScanning(null); onScan(item.path) }, 700)
   }
   return (
-    <div className="absolute inset-0 bg-ocean-900 text-white">
+    <div className="absolute inset-0 bg-navy text-white">
     <div className="absolute inset-0 overflow-y-auto p-4">
       <p className="text-center text-sm text-white/80">{t('demo_camera_hint')}</p>
       <h3 className="mt-3 text-xs uppercase tracking-widest text-white/60">{t('demo_racks')}</h3>
@@ -158,12 +159,12 @@ function Camera({ onScan }) {
 function FakeQr({ item, label, busy, onClick }) {
   const [src, setSrc] = useState(null)
   useEffect(() => {
-    QRCode.toDataURL(window.location.origin + item.path, { margin: 1, width: 160, color: { dark: '#0B2B2E', light: '#FFFFFF' } })
+    QRCode.toDataURL(window.location.origin + item.path, { margin: 1, width: 160, color: { dark: '#0B2533', light: '#FFFFFF' } })
       .then(setSrc).catch(() => setSrc(null))
   }, [item.path])
   return (
     <button onClick={onClick}
-      className={`rounded-xl bg-white p-1.5 text-center text-ocean-900 transition active:scale-95 ${busy ? 'ring-4 ring-cork-400' : ''}`}>
+      className={`rounded-xl bg-white p-1.5 text-center text-navy transition active:scale-95 ${busy ? 'ring-4 ring-sun' : ''}`}>
       {src ? <img src={src} alt={label} className="w-full" /> : <div className="aspect-square" />}
       <div className="truncate font-mono text-[10px] font-semibold">{label}</div>
     </button>
@@ -186,20 +187,20 @@ function Messages({ phone, list, onOpen }) {
     window.open(href, '_blank', 'noreferrer')
   }
   return (
-    <div className="absolute inset-0 flex flex-col bg-sand-50">
-      <div className="shrink-0 border-b border-sand-200 bg-white py-2 text-center">
-        <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-ocean-500 text-sm font-bold text-white">G</div>
-        <div className="text-xs font-semibold">{t('demo_sender')}</div>
-        {phone && <div className="text-[10px] text-ocean-700/60">{phone}</div>}
+    <div className="absolute inset-0 flex flex-col bg-muted">
+      <div className="shrink-0 border-b bg-white py-2 text-center">
+        <div className="mx-auto flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-navy"><img src="/favicon.png" alt="" className="h-7 w-7" /></div>
+        <div className="text-xs font-bold">{t('demo_sender')}</div>
+        {phone && <div className="text-[10px] text-muted-foreground">{phone}</div>}
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-        {!ordered.length && <p className="mt-8 text-center text-sm text-ocean-700/70">{t('demo_no_sms')}</p>}
+        {!ordered.length && <p className="mt-8 px-4 text-center text-sm text-muted-foreground">{t('demo_no_sms')}</p>}
         {ordered.map((m) => (
           <div key={m.id} className="max-w-[85%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm shadow-sm">
             {String(m.text).split(LINK).map((part, i) => (IS_LINK.test(part) ? (
-              <button key={i} className="break-all text-left text-ocean-500 underline" onClick={() => follow(part)}>{part}</button>
+              <button key={i} className="break-all text-left font-bold text-ocean-700 underline" onClick={() => follow(part)}>{part}</button>
             ) : <span key={i}>{part}</span>))}
-            {m.status && m.status !== 'demo' && <div className="mt-1 text-[10px] text-ocean-700/60">{t(`sms_${m.status}`)}</div>}
+            {m.status && m.status !== 'demo' && <div className="mt-1 text-[10px] text-muted-foreground">{t(`sms_${m.status}`)}</div>}
           </div>
         ))}
         <div ref={bottom} />
@@ -216,14 +217,14 @@ function BottomBar({ app, setApp, unread }) {
     ['messages', t('demo_messages'), <MessagesIcon key="m" />],
   ]
   return (
-    <nav className="flex shrink-0 items-center justify-around border-t border-sand-200 bg-white/95 px-4 pb-4 pt-2">
+    <nav className="flex shrink-0 items-center justify-around border-t bg-white/95 px-4 pb-4 pt-2">
       {items.map(([id, label, icon]) => (
         <button key={id} onClick={() => setApp(id)} aria-label={label} aria-pressed={app === id}
-          className={`relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1 text-[10px] ${app === id ? 'bg-sand-100 font-semibold text-ocean-900' : 'text-ocean-700/70'}`}>
+          className={`relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1 text-[10px] ${app === id ? 'bg-muted font-bold text-navy' : 'text-muted-foreground'}`}>
           {icon}
           {label}
           {id === 'messages' && unread > 0 && (
-            <span className="absolute -top-1 right-1 min-w-[18px] rounded-full bg-coral-500 px-1 text-[10px] font-bold text-white">{unread}</span>
+            <span className="absolute -top-1 right-1 min-w-[18px] rounded-full bg-coral px-1 text-[10px] font-bold text-white">{unread}</span>
           )}
         </button>
       ))}
