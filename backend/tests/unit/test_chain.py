@@ -74,8 +74,8 @@ class RealModeTest(unittest.TestCase):
         import threading
         tmp = Path(tempfile.mkdtemp())
         w3, calls = self.make_w3(fail_first)
-        chain = ChainService("team", {"OPERATOR_KEY": "0x" + "1" * 64}, tmp, w3=w3)
-        self.assertEqual((chain.mode, chain.label), ("real", "ÉQUIPE · démo"))
+        chain = ChainService("team", {"OPERATOR_KEY": "0x" + "1" * 64}, tmp, w3=w3, read_history=False)
+        self.assertEqual((chain.mode, chain.label), ("real", "ÉQUIPE · démo · V1"))
         done = threading.Event()
         got = []
         chain.on_sent = lambda refs, h: (got.append((refs, h)), done.set())

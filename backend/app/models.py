@@ -230,4 +230,6 @@ class ChainTx(Base):
     station: Mapped[str] = mapped_column(String(8), default="")
     t: Mapped[float] = mapped_column(Float)
     tx_hash: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    proof: Mapped[str] = mapped_column(String(66), default="")  # e.g. SHA-256 of an inspection photo
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending, sent, rejected, skipped
+    note: Mapped[str] = mapped_column(String(120), default="")

@@ -27,13 +27,14 @@ from .services import Services
 # ------------------------------------------------------------------ small helpers
 
 def record_chain(db: Session, board_id: str, event_type: str, station: str, t: float,
-                 rental_id: Optional[int] = None) -> ChainTx:
+                 rental_id: Optional[int] = None, proof: str = "",
+                 extra: Optional[dict[str, Any]] = None) -> ChainTx:
     """Add a chain_txs row; the event is published once the request is committed."""
     row = ChainTx(board_id=board_id, event_type=event_type, station=station or "", t=t,
-                  rental_id=rental_id, status="pending")
+                  rental_id=rental_id, status="pending", proof=proof or "")
     db.add(row)
     db.flush()
-    db.info.setdefault("chain_pending", []).append((row.id, board_id, event_type, station, t))
+    db.info.setdefault("chain_pending", []).append((row.id, board_id, event_type, station, t, proof, extra))
     return row
 
 

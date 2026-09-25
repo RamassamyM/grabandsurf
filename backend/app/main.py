@@ -57,7 +57,13 @@ def create_app(settings: Optional[Settings] = None, services: Optional[Services]
             db.execute(update(ChainTx).where(ChainTx.id.in_(refs)).values(status="rejected"))
             db.commit()
 
+    def on_skipped(refs: list[int], reason: str) -> None:
+        with sessionmaker() as db:
+            db.execute(update(ChainTx).where(ChainTx.id.in_(refs)).values(status="skipped", note=reason[:120]))
+            db.commit()
+
     services.chain.on_sent, services.chain.on_rejected = on_sent, on_rejected
+    services.chain.on_skipped = on_skipped
     services.sms.sessionmaker = sessionmaker
 
     app = FastAPI(title="Grab&Surf", version="1.0",
