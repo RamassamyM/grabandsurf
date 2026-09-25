@@ -102,6 +102,28 @@ Remettre la démo à zéro : bouton en bas de la page exploitant, ou `python -m 
   vérification sur `/operator/inspection` : valider l'état (caution libérée) ou retenir un forfait.
   Sans action, libération automatique après 8 h ou à la location suivante de la planche sans signalement.
 
+## Fonctions ajoutées : SMS réels, passeport lu sur la chaîne, parrainage, contrat V2, démo téléphone
+
+- **SMS** : `SMS_MODE=demo` (par défaut) affiche les SMS à l'écran seulement. `SMS_MODE=twilio` avec
+  `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` et `TWILIO_FROM` (ou `TWILIO_MESSAGING_SERVICE_SID`) les envoie
+  vraiment, en tâche de fond, et les garde affichés dans la boîte de démo avec leur statut (envoyé, échec).
+  Compte d'essai Twilio : seuls les numéros vérifiés reçoivent, et la France doit être autorisée (Geo permissions).
+- **Passeport lu sur la chaîne** : le carnet de vie vient des événements du contrat (`get_logs`, cache dans
+  `data/`), relié à la base par le hash de transaction (durée de session, partenaire du pack, signature photo).
+  Chaque ligne dit si elle est vérifiée sur la chaîne, en attente, ou non inscrite.
+- **Photos signées** : l'empreinte SHA-256 de la photo de retour est inscrite (`INSPECTION`) et signée par le
+  wallet exploitant ; la photo reste privée. « Vérifier une photo » sur le passeport recalcule l'empreinte
+  sur le téléphone et la compare au registre.
+- **Parrainage** : dans `/partner/:id`, un partenaire propose le design d'un artiste local pour une planche
+  (noms publics, dates, galerie, vidéos). Le propriétaire valide dans `/owner`, onglet « Parrainages » ;
+  le passeport met en avant l'artiste et le sponsor, et le design devient l'image du NFT (contrat V2).
+- **Faux départ** : « Corriger (faux départ) » sur une planche en alerte vol ; le départ reste sur la chaîne,
+  suivi d'une correction. **Achat implicite** : le SMS contient un lien `/claim/...` pour recevoir le NFT.
+- **Contrat V2** : préparé et testé, pas encore déployé. Procédure : [docs/CHAIN_MIGRATION.md](docs/CHAIN_MIGRATION.md).
+- **Démo téléphone** : l'interrupteur « Vue téléphone » en bas à gauche des pages client ouvre `/demo` : la page
+  dans un téléphone, avec en bas le navigateur, l'appareil photo (des QR factices à toucher pour « scanner »
+  un rack ou une planche) et les messages (les SMS reçus, liens cliquables).
+
 ## 3. Tests
 
 ```

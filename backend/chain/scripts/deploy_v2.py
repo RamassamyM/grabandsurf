@@ -59,6 +59,8 @@ def main(args: Optional[list[str]] = None, w3: Any = None, t0: int = 0) -> str:
     receipt = w3.eth.wait_for_transaction_receipt(w3.eth.send_raw_transaction(raw), timeout=120)
     address = receipt["contractAddress"]
     print("Contrat V2 déployé : %s/address/%s (bloc %d)" % (explorer, address, receipt["blockNumber"]))
+    print("Arguments du constructeur (Snowtrace) : admin %s, image %s" % (account.address, image))
+    print("  encodés ABI : %s" % w3.codec.encode(["address", "string"], [account.address, image]).hex())
 
     contract = w3.eth.contract(address=address, abi=c["abi"])
     for station, boards in sorted(STATIONS.items()):
