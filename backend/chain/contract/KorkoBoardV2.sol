@@ -11,7 +11,7 @@ pragma solidity ^0.8.24;
 //   - sponsorship by a partner with the design of a local artist, shown in tokenURI.
 //
 // What goes on-chain: board, station, event type, flow time, proofs, and the PUBLIC
-// names of sponsors and artists who agreed to it. Never a customer, a phone or a card.
+// names of sponsors and artists who agreed to it (no wallet). Never a customer, a phone or a card.
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
@@ -49,10 +49,8 @@ contract KorkoBoardV2 is ERC721, AccessControl {
     }
 
     struct Sponsorship {
-        string sponsorName;   // public name, given with consent
-        address sponsorWallet; // optional (zero address)
-        string artistName;
-        address artistWallet;  // optional (zero address)
+        string sponsorName;   // public name, given with consent (no wallet, no personal data)
+        string artistName;    // public name, given with consent
         bytes32 designHash;   // SHA-256 of the design file
         string designURI;     // where the design image is published
         uint64 startDate;     // unix dates chosen by the parties
@@ -75,9 +73,7 @@ contract KorkoBoardV2 is ERC721, AccessControl {
         uint256 indexed board,
         uint32 indexed number,
         string sponsorName,
-        address sponsorWallet,
         string artistName,
-        address artistWallet,
         bytes32 designHash,
         string designURI,
         uint64 startDate,
@@ -196,9 +192,7 @@ contract KorkoBoardV2 is ERC721, AccessControl {
     function startSponsorship(
         uint256 board,
         string calldata sponsorName,
-        address sponsorWallet,
         string calldata artistName,
-        address artistWallet,
         bytes32 designHash,
         string calldata designURI,
         uint64 startDate,
@@ -209,13 +203,10 @@ contract KorkoBoardV2 is ERC721, AccessControl {
         _checkText(sponsorName);
         _checkText(artistName);
         _checkText(designURI);
-        _sponsorships[board] = Sponsorship(
-            sponsorName, sponsorWallet, artistName, artistWallet, designHash, designURI, startDate, endDate, true
-        );
+        _sponsorships[board] = Sponsorship(sponsorName, artistName, designHash, designURI, startDate, endDate, true);
         sponsorshipCount[board] += 1;
         emit SponsorshipStarted(
-            board, sponsorshipCount[board], sponsorName, sponsorWallet, artistName, artistWallet,
-            designHash, designURI, startDate, endDate
+            board, sponsorshipCount[board], sponsorName, artistName, designHash, designURI, startDate, endDate
         );
     }
 

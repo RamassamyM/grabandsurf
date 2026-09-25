@@ -227,8 +227,7 @@ class ChainHistory:
         elif name == "SponsorshipStarted":
             state["sponsorships"].append(dict(
                 base, board=int(a["board"]), number=int(a["number"]), sponsor_name=a["sponsorName"],
-                sponsor_wallet=a["sponsorWallet"], artist_name=a["artistName"], artist_wallet=a["artistWallet"],
-                design_hash=a["designHash"].hex().removeprefix("0x"), design_uri=a["designURI"],
+                artist_name=a["artistName"], design_hash=a["designHash"].hex().removeprefix("0x"), design_uri=a["designURI"],
                 start_date=int(a["startDate"]), end_date=int(a["endDate"]), ended=False))
         elif name == "SponsorshipEnded":
             for s in state["sponsorships"]:
@@ -500,10 +499,7 @@ class ChainService:
             from web3 import Web3
             return f.sellTo(first["board"], Web3.to_checksum_address(x["buyer"]), first["t"])
         if kind == "SPONSORING":
-            from web3 import Web3
-            return f.startSponsorship(first["board"], x["sponsor_name"],
-                                      Web3.to_checksum_address(x.get("sponsor_wallet") or ZERO_ADDRESS),
-                                      x["artist_name"], Web3.to_checksum_address(x.get("artist_wallet") or ZERO_ADDRESS),
+            return f.startSponsorship(first["board"], x["sponsor_name"], x["artist_name"],
                                       to_bytes32(x.get("design_hash")), x.get("design_uri", ""),
                                       int(x.get("start_date", 0)), int(x.get("end_date", 0)))
         if kind == "FIN_SPONSORING":

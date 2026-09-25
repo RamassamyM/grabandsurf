@@ -14,10 +14,11 @@ from sqlalchemy.orm import Session
 from backend.app.domain.packs import new_pack_code, pack_price_cents, split_minutes
 from backend.app.models import (Alert, AppState, Board, CardHold, ChainTx, Customer, DamageReport,
                                 Inspection, OtpCode, Pack, PackCode, Partner, Photo, Rental, RepairFee, SmsMessage,
-                                Station, StationEvent, WalletEntry)
+                                                                Station, StationEvent, WalletEntry)
 
-WIPE_ORDER = [WalletEntry, CardHold, DamageReport, Photo, Rental, PackCode, Pack, Partner, OtpCode,
-              SmsMessage, Alert, Inspection, StationEvent, ChainTx, Customer, Board]
+# Boards, partners, sponsorships and the repair grid survive a demo reset (content, not activity).
+WIPE_ORDER = [WalletEntry, CardHold, DamageReport, Photo, Rental, PackCode, Pack, OtpCode,
+              SmsMessage, Alert, Inspection, StationEvent, ChainTx, Customer]
 
 
 def seed(db: Session, config: dict[str, Any], rng: random.Random | None = None) -> None:
@@ -38,11 +39,19 @@ def seed(db: Session, config: dict[str, Any], rng: random.Random | None = None) 
         if db.get(RepairFee, zone) is None:
             db.add(RepairFee(zone=zone, label=info["label"], fee_cents=info["fee_cents"]))
     for board_id, home in config["fleet"].items():
-        db.add(Board(id=board_id, token_id=int(board_id.rsplit("-", 1)[-1]), home_station=home,
-                     current_station=home, status="at_rack", status_t=now, beacon_installed_t=0.0))
+        board = db.get(Board, board_id)
+        if board is None:
+            board = Board(id=board_id, token_id=int(board_id.rsplit("-", 1)[-1]), beacon_installed_t=0.0)
+            db.add(board)
+        board.home_station, board.current_station, board.status, board.status_t = home, home, "at_rack", now
+        board.rentals_count, board.needs_review, board.passport_views = 0, False, 0
 
     for pid, info in config["partners"].items():
-        db.add(Partner(id=pid, name=info["name"]))
+        partner = db.get(Partner, pid)
+        if partner is None:
+            db.add(Partner(id=pid, name=info["name"]))
+        else:
+            partner.name = info["name"]
     db.flush()
     taken: set[str] = set()
     for code, info in config["packs"].items():

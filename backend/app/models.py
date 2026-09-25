@@ -39,6 +39,7 @@ class Board(Base):
     status_t: Mapped[float] = mapped_column(Float, default=0.0)
     rentals_count: Mapped[int] = mapped_column(Integer, default=0)
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    passport_views: Mapped[int] = mapped_column(Integer, default=0)  # anonymous count of passport openings
     beacon_installed_t: Mapped[float] = mapped_column(Float, default=0.0)
 
 
@@ -112,6 +113,7 @@ class Rental(Base):
     deposit_status: Mapped[str] = mapped_column(String(16), default="held")
     deposit_due_t: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     checked_role: Mapped[str] = mapped_column(String(24), default="")  # role only, never a name
+    claim_wallet: Mapped[str] = mapped_column(String(42), default="")  # wallet given to receive the NFT
 
 
 class CardHold(Base):
@@ -145,6 +147,8 @@ class Photo(Base):
     path: Mapped[str] = mapped_column(String(255), default="")
     ai_result: Mapped[str] = mapped_column(Text, default="{}")
     rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
+    signature: Mapped[str] = mapped_column(String(140), default="")  # EIP-191 signature of the hash
+    signer: Mapped[str] = mapped_column(String(42), default="")
     validated: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     t: Mapped[float] = mapped_column(Float, default=0.0)
 
@@ -174,6 +178,39 @@ class RepairFee(Base):
     zone: Mapped[str] = mapped_column(String(24), primary_key=True)
     label: Mapped[str] = mapped_column(String(48))
     fee_cents: Mapped[int] = mapped_column(Integer)
+
+
+class Sponsorship(Base):
+    """A partner sponsors a board with the design of a local artist (public names, given with consent)."""
+
+    __tablename__ = "sponsorships"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    board_id: Mapped[str] = mapped_column(ForeignKey("boards.id"), index=True)
+    partner_id: Mapped[str] = mapped_column(ForeignKey("partners.id"))
+    sponsor_name: Mapped[str] = mapped_column(String(80))
+    sponsor_url: Mapped[str] = mapped_column(String(200), default="")
+    message: Mapped[str] = mapped_column(String(280), default="")
+    artist_name: Mapped[str] = mapped_column(String(80))
+    artist_bio: Mapped[str] = mapped_column(String(400), default="")
+    design_path: Mapped[str] = mapped_column(String(255), default="")
+    design_sha256: Mapped[str] = mapped_column(String(64), default="")
+    start_date: Mapped[str] = mapped_column(String(10))            # calendar dates chosen by the parties
+    end_date: Mapped[str] = mapped_column(String(10), default="")
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending, active, rejected, ended
+    reviewer_role: Mapped[str] = mapped_column(String(24), default="")
+    views_at_start: Mapped[int] = mapped_column(Integer, default=0)
+    created_t: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class SponsorMedia(Base):
+    __tablename__ = "sponsor_media"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sponsorship_id: Mapped[int] = mapped_column(ForeignKey("sponsorships.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(8))  # image, video
+    path: Mapped[str] = mapped_column(String(255), default="")
+    url: Mapped[str] = mapped_column(String(300), default="")
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    caption: Mapped[str] = mapped_column(String(160), default="")
 
 
 class StationEvent(Base):

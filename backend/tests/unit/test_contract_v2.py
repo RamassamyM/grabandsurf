@@ -89,10 +89,10 @@ class ContractV2Test(unittest.TestCase):
 
     def test_sponsorship_in_metadata(self):
         design = bytes.fromhex("cd" * 32)
-        self.send(self.f.startSponsorship(1, "Surf Shop Anglet", self.other, "Lea Mar", "0x" + "0" * 40,
-                                          design, "https://grabandsurf.example/design1.png", 1760000000, 0))
+        self.send(self.f.startSponsorship(1, "Surf Shop Anglet", "Lea Mar", design,
+                                          "https://grabandsurf.example/design1.png", 1760000000, 0))
         sp = self.f.sponsorship(1).call()
-        self.assertEqual((sp[0], sp[2], sp[4], sp[8]), ("Surf Shop Anglet", "Lea Mar", design, True))
+        self.assertEqual((sp[0], sp[1], sp[2], sp[6]), ("Surf Shop Anglet", "Lea Mar", design, True))
         meta = json.loads(base64.b64decode(self.f.tokenURI(1).call().split(",", 1)[1]))
         self.assertEqual(meta["image"], "https://grabandsurf.example/design1.png")
         self.assertIn({"trait_type": "Artist", "value": "Lea Mar"}, meta["attributes"])
@@ -104,10 +104,9 @@ class ContractV2Test(unittest.TestCase):
     def test_sponsorship_rejects_json_breaking_text_and_bad_dates(self):
         for args in [('Bad "name"', 1, 0), ("Ok", 20, 10)]:
             with self.assertRaises(REVERTED):
-                self.send(self.f.startSponsorship(1, args[0], self.other, "Artist", self.other, ZERO, "u",
-                                                  args[1], args[2]))
+                self.send(self.f.startSponsorship(1, args[0], "Artist", ZERO, "u", args[1], args[2]))
         with self.assertRaises(REVERTED):
-            self.send(self.f.startSponsorship(1, "S", self.other, "A", self.other, ZERO, "u", 0, 0), self.other)
+            self.send(self.f.startSponsorship(1, "S", "A", ZERO, "u", 0, 0), self.other)
 
 
 if __name__ == "__main__":
