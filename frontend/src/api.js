@@ -4,6 +4,7 @@ const TOKEN_KEY = 'gs_token'
 const PHONE_KEY = 'gs_phone'
 const PIN_KEY = 'gs_operator_pin'
 const RACK_KEY = 'gs_last_rack'
+const PACK_KEY = 'gs_pending_pack'
 
 function safeGet(key) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -20,6 +21,8 @@ export const session = {
   phone: () => safeGet(PHONE_KEY),
   save: (token, phone) => { safeSet(TOKEN_KEY, token); safeSet(PHONE_KEY, phone) },
   clear: () => { safeSet(TOKEN_KEY, null); safeSet(PHONE_KEY, null) },
+  pendingPack: () => safeGet(PACK_KEY) || '',
+  setPendingPack: (code) => safeSet(PACK_KEY, code || null),
   pin: () => safeGet(PIN_KEY) || '',
   setPin: (pin) => safeSet(PIN_KEY, pin),
   // Backup return needs a rack QR scanned in the last 5 minutes (kept in this browser).

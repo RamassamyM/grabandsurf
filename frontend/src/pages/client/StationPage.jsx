@@ -85,6 +85,7 @@ function SignUp({ onLogged, referral }) {
     setBusy(true); setError(null)
     try {
       const r = await api.verifyOtp(sent.phone, code, ref)
+      if (r.pack_code) session.setPendingPack(r.pack_code)
       onLogged(r.token, sent.phone)
     } catch (err) { setError(err.message) }
     setBusy(false)
@@ -118,7 +119,7 @@ function SignUp({ onLogged, referral }) {
         <label className="label" htmlFor="code">Code à 4 chiffres</label>
         <input id="code" className="input text-center font-mono text-2xl tracking-[.5em]" inputMode="numeric"
           maxLength={4} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
-        <label className="label" htmlFor="ref">Code de parrainage (facultatif)</label>
+        <label className="label" htmlFor="ref">Code de parrainage d'un ami (facultatif)</label>
         <input id="ref" className="input uppercase" placeholder="SURF-7K2P" value={ref}
           onChange={(e) => setRef(e.target.value)} />
         <ErrorNote error={error} />
@@ -172,13 +173,13 @@ function Rental({ station, me, reload, available }) {
 }
 
 function RentForm({ station, reload, available }) {
-  const [pack, setPack] = useState('')
-  const [showPack, setShowPack] = useState(false)
+  const [pack, setPack] = useState(session.pendingPack())
+  const [showPack, setShowPack] = useState(Boolean(session.pendingPack()))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const rent = async () => {
     setBusy(true); setError(null)
-    try { await api.rent(station, pack); await reload() } catch (err) { setError(err.message) }
+    try { await api.rent(station, pack); session.setPendingPack(null); await reload() } catch (err) { setError(err.message) }
     setBusy(false)
   }
   return (

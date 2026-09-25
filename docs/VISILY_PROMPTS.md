@@ -60,7 +60,7 @@ En-tête commun : bandeau texture liège, logo Grab&Surf dans une pastille blanc
 - « Envoyé au +33612345678. »
 - Encadré sable : « Démo : ton code est 0266 »
 - Champ code à 4 chiffres, grand et espacé
-- Champ « Code de parrainage (facultatif) », exemple SURF-7K2P
+- Champ « Code de parrainage d'un ami (facultatif) », exemple SURF-7K2P (un code pack saisi ici est repris au moment de louer)
 - Bouton « Valider », lien « Changer de numéro »
 - Bouton flottant en bas à droite « SMS de démo » avec la pastille « 1 »
 

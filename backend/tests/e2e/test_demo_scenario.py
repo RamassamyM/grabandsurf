@@ -239,6 +239,18 @@ class DemoScenarioTest(unittest.TestCase):
         f = self.client.get("/api/fleet").json()
         self.assertTrue(all(b["since_label"] == "0 min" for b in f["boards"]))
 
+    def test_pack_code_typed_in_referral_field(self):
+        c = self.client
+        code = c.post("/api/otp", json={"phone": "+33688888888"}).json()["demo_code"]
+        r = c.post("/api/otp/verify", json={"phone": "+33688888888", "code": code, "referral_code": "maif-surf"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["pack_code"], "MAIF-SURF")
+        self.assertEqual(r.json()["profile"]["wallet_cents"], 0)
+        code = c.post("/api/otp", json={"phone": "+33699999999"}).json()["demo_code"]
+        bad = c.post("/api/otp/verify", json={"phone": "+33699999999", "code": code, "referral_code": "NOPE-1234"})
+        self.assertEqual(bad.status_code, 400)
+        self.assertIn("MAIF-SURF", bad.json()["detail"])
+
     def test_errors_are_clear_not_500(self):
         c = self.client
         self.assertEqual(c.post("/api/otp", json={"phone": "abc"}).status_code, 400)

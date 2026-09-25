@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ..deps import current_customer, get_db, get_services, get_settings, sign_customer
 from ..domain import wallet
 from ..domain.pricing import format_eur
-from ..models import Customer, OtpCode, Rental, SmsMessage, WalletEntry
+from ..models import Customer, OtpCode, PackCode, Rental, SmsMessage, WalletEntry
 from ..schemas import CardHoldRequest, OtpRequest, OtpVerify
 from ..services import Services
 from ..settings import Settings
@@ -65,12 +65,16 @@ def verify_otp(body: OtpVerify, db: Session = Depends(get_db), services: Service
     otp.used = True
     customer = db.scalar(select(Customer).where(Customer.phone == phone))
     created = customer is None
+    referral = (body.referral_code or "").strip().upper()
+    pack_code = None
+    if referral and db.scalar(select(PackCode.id).where(PackCode.code == referral)):
+        pack_code, referral = referral, ""  # a pack code typed in the referral field: keep it for the rental
     if created:
         taken = set(db.scalars(select(Customer.referral_code)))
         customer = Customer(phone=phone, referral_code=wallet.new_referral_code(_rng, taken), created_t=now)
-        sponsor = _find_sponsor(db, body.referral_code) if body.referral_code else None
-        if body.referral_code and sponsor is None:
-            raise HTTPException(400, "Code de parrainage inconnu.")
+        sponsor = _find_sponsor(db, referral) if referral else None
+        if referral and sponsor is None:
+            raise HTTPException(400, "Code de parrainage inconnu. Un code pack (ex. MAIF-SURF) se saisit au moment de louer.")
         db.add(customer)
         db.flush()
         if sponsor:
@@ -79,7 +83,7 @@ def verify_otp(body: OtpVerify, db: Session = Depends(get_db), services: Service
             credit(db, customer.id, cents, "referral_guest", now)
             services.sms.send(db, phone, "Bienvenue ! %s offerts par ton parrain sur ta première session."
                               % format_eur(cents), now)
-    return {"token": sign_customer(settings, customer.id), "created": created,
+    return {"token": sign_customer(settings, customer.id), "created": created, "pack_code": pack_code,
             "profile": profile(db, customer, settings)}
 
 
