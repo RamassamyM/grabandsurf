@@ -67,6 +67,7 @@ def fleet_view(db: Session = Depends(get_db), services: Services = Depends(get_s
         "rentals": [{"id": r.id, "board_id": r.board_id, "status": r.status,
                      "duration_s": (r.end_t or now) - (r.start_t or now), "charged_cents": r.charged_cents,
                      "return_mode": r.return_mode} for r in rentals],
+        "sms": {"mode": services.sms.mode, "label": services.sms.label, "reason": services.sms.reason},
         "chain": dict(services.chain.status(),
                       txs=[{"id": t.id, "board_id": t.board_id, "event_type": t.event_type, "station": t.station,
                             "t": t.t, "status": t.status, "tx_hash": t.tx_hash,

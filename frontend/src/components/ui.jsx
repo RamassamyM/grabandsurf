@@ -148,7 +148,10 @@ export function SmsInbox({ phone }) {
           {count === 0 && <p className="text-sm text-ocean-700/70">{t('sms_none')}</p>}
           <ul className="space-y-2">
             {(data || []).map((m) => (
-              <li key={m.id} className="rounded-xl rounded-tl-sm bg-sand-100 px-3 py-2 text-sm">{m.text}</li>
+              <li key={m.id} className="rounded-xl rounded-tl-sm bg-sand-100 px-3 py-2 text-sm">
+                {m.text}
+                <SmsStatus status={m.status} error={m.error} />
+              </li>
             ))}
           </ul>
         </Card>
@@ -160,6 +163,17 @@ export function SmsInbox({ phone }) {
         <span aria-hidden>✉</span> {t('sms_demo')}
         {count > 0 && <span className="rounded-full bg-cork-400 px-2 text-xs">{count}</span>}
       </button>
+    </div>
+  )
+}
+
+export function SmsStatus({ status, error }) {
+  const { t } = useT()
+  if (!status || status === 'demo') return null
+  const styles = { queued: 'text-ocean-700/60', sent: 'text-ocean-500', failed: 'text-coral-600' }
+  return (
+    <div className={`mt-1 text-[11px] font-medium ${styles[status] || ''}`} title={error || ''}>
+      {t(`sms_${status}`)}{status === 'failed' && error ? ` : ${error}` : ''}
     </div>
   )
 }

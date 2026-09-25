@@ -344,6 +344,23 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertTrue(sms[0]["text"].startswith("¡Adelante con korko-01!"))
         self.assertTrue(sms[-1]["text"].startswith("Grab&Surf: tu código"))
 
+    def test_real_sms_still_shown_in_demo_inbox(self):
+        from backend.tests.unit.test_sms import FakeTransport
+        from backend.app.services.sms import SmsService
+        transport = FakeTransport()
+        sms = SmsService("twilio", transport, run=lambda job: job())
+        sms.sessionmaker = self.client.app.state.sessionmaker
+        self.services.sms = sms
+        self.demo.sign_up("+33612121212")
+        inbox = self.client.get("/api/sms", params={"phone": "+33612121212"}).json()
+        self.assertEqual((inbox[0]["status"], len(transport.sent)), ("sent", 1))
+        self.assertTrue(transport.sent[0][1].startswith("Grab&Surf : ton code est"))
+        transport.fail = "Twilio 21608 : unverified number"
+        self.client.post("/api/otp", json={"phone": "+33612121212"})
+        inbox = self.client.get("/api/sms", params={"phone": "+33612121212"}).json()
+        self.assertEqual(inbox[0]["status"], "failed")
+        self.assertIn("21608", inbox[0]["error"])
+
     def test_errors_are_clear_not_500(self):
         c = self.client
         self.assertEqual(c.post("/api/otp", json={"phone": "abc"}).status_code, 400)

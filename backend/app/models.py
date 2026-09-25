@@ -215,6 +215,10 @@ class SmsMessage(Base):
     phone: Mapped[str] = mapped_column(String(32), index=True)
     text: Mapped[str] = mapped_column(String(480))
     t: Mapped[float] = mapped_column(Float, default=0.0)
+    # demo (shown on screen only), queued, sent, failed
+    status: Mapped[str] = mapped_column(String(16), default="demo")
+    provider_id: Mapped[str] = mapped_column(String(64), default="")
+    error: Mapped[str] = mapped_column(String(255), default="")
 
 
 class ChainTx(Base):

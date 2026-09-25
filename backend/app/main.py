@@ -17,7 +17,8 @@ from .api import customers, fleet, inspections, owner, partners, passport, photo
 from .i18n import request_lang, t
 from .db import create_tables, make_engine, make_sessionmaker
 from .models import Board, ChainTx
-from .services import Alarm, ChainService, DemoSms, FakePayment, Services
+from .services import Alarm, ChainService, FakePayment, Services
+from .services.sms import build_sms
 from .services.photo_ai import build_photo_ai
 from .settings import Settings, load_settings
 
@@ -26,7 +27,7 @@ log = logging.getLogger(__name__)
 
 def build_services(settings: Settings) -> Services:
     """Real or fake versions, chosen by the settings."""
-    return Services(sms=DemoSms(), payment=FakePayment(),
+    return Services(sms=build_sms(settings.env), payment=FakePayment(),
                     photo_ai=build_photo_ai(settings.env.get("PHOTO_AI", "auto"), settings.env, settings.config),
                     alarm=Alarm(sound=settings.alarm_sound),
                     chain=ChainService(settings.chain_mode, settings.env, settings.data_dir))
@@ -57,6 +58,7 @@ def create_app(settings: Optional[Settings] = None, services: Optional[Services]
             db.commit()
 
     services.chain.on_sent, services.chain.on_rejected = on_sent, on_rejected
+    services.sms.sessionmaker = sessionmaker
 
     app = FastAPI(title="Grab&Surf", version="1.0",
                   description="Location de planches en liège sans personne sur place.")
