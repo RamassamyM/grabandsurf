@@ -67,6 +67,7 @@ const put = (path, body) => request('PUT', path, body)
 export const api = {
   // stations
   station: (id) => get(`/api/stations/${encodeURIComponent(id)}`),
+  stations: () => get('/api/stations'),
   // customers
   sendOtp: (phone) => post('/api/otp', { phone }),
   verifyOtp: (phone, code, referralCode) =>

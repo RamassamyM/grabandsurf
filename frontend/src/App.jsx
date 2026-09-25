@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import StationPage from './pages/client/StationPage.jsx'
 import PassportPage from './pages/passport/PassportPage.jsx'
@@ -8,6 +9,10 @@ import OwnerPage from './pages/owner/OwnerPage.jsx'
 import ClaimPage from './pages/claim/ClaimPage.jsx'
 import DemoPage, { PhoneSwitchButton } from './pages/demo/DemoPage.jsx'
 import { isEmbedded } from './api.js'
+
+// The landing page (and its map library) loads on its own, the rental pages stay light.
+const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
+const landing = <Suspense fallback={<div className="min-h-dvh bg-[#0B2533]" />}><LandingPage /></Suspense>
 import { Card, Logo } from './components/ui.jsx'
 import { LangSwitch } from './i18n.jsx'
 
@@ -58,7 +63,8 @@ function Customer({ children }) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={landing} />
+      <Route path="/app" element={<Home />} />
       <Route path="/demo" element={<DemoPage />} />
       <Route path="/s/:station" element={<Customer><StationPage /></Customer>} />
       <Route path="/p/:board" element={<Customer><PassportPage /></Customer>} />
@@ -67,7 +73,7 @@ export default function App() {
       <Route path="/operator/inspection" element={<InspectionPage />} />
       <Route path="/owner" element={<OwnerPage />} />
       <Route path="/partner/:id" element={<PartnerPage />} />
-      <Route path="*" element={<Home />} />
+      <Route path="*" element={landing} />
     </Routes>
   )
 }
