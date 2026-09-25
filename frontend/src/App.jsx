@@ -3,18 +3,23 @@ import StationPage from './pages/client/StationPage.jsx'
 import PassportPage from './pages/passport/PassportPage.jsx'
 import OperatorPage from './pages/operator/OperatorPage.jsx'
 import PartnerPage from './pages/partner/PartnerPage.jsx'
+import InspectionPage from './pages/operator/InspectionPage.jsx'
+import OwnerPage from './pages/owner/OwnerPage.jsx'
 import { Card, Logo } from './components/ui.jsx'
+import { LangSwitch } from './i18n.jsx'
 
 function Home() {
   const links = [
     ['/s/A', 'Client', 'Rack A, parcours de location'],
     ['/p/korko-01', 'Passeport', 'La planche korko-01'],
     ['/operator', 'Exploitant', 'Tableau de bord du parc'],
+    ['/operator/inspection', 'Inspection', 'Vérifier les retours, libérer les cautions'],
+    ['/owner', 'Propriétaire', 'QR à imprimer, forfaits de réparation'],
     ['/partner/maif', 'Partenaire', 'Tableau MAIF'],
   ]
   return (
     <main className="mx-auto max-w-md px-4 py-10">
-      <Logo />
+      <div className="flex items-center justify-between"><Logo /><LangSwitch /></div>
       <p className="mt-3 text-ocean-700">Des planches en liège en libre-service. Scanne, surfe, raccroche.</p>
       <div className="mt-8 space-y-3">
         {links.map(([to, title, text]) => (
@@ -37,6 +42,8 @@ export default function App() {
       <Route path="/s/:station" element={<StationPage />} />
       <Route path="/p/:board" element={<PassportPage />} />
       <Route path="/operator" element={<OperatorPage />} />
+      <Route path="/operator/inspection" element={<InspectionPage />} />
+      <Route path="/owner" element={<OwnerPage />} />
       <Route path="/partner/:id" element={<PartnerPage />} />
       <Route path="*" element={<Home />} />
     </Routes>

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -32,7 +34,16 @@ def make_sessionmaker(engine: Engine) -> sessionmaker[Session]:
 
 
 def create_tables(engine: Engine) -> None:
-    """Create every table (no migrations during the hackathon)."""
+    """Create every table; no migrations during the hackathon, so an outdated schema is rebuilt."""
+    from sqlalchemy import inspect
+    existing = inspect(engine)
+    outdated = [t.name for t in Base.metadata.sorted_tables
+                if existing.has_table(t.name)
+                and {c.name for c in t.columns} - {c["name"] for c in existing.get_columns(t.name)}]
+    if outdated:
+        logging.getLogger(__name__).warning("database schema changed (%s): rebuilding the demo database",
+                                            ", ".join(outdated))
+        Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
 

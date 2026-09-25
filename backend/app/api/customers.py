@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import current_customer, get_db, get_services, get_settings, sign_customer
+from ..i18n import request_lang, t
 from ..domain import wallet
 from ..domain.pricing import format_eur
 from ..models import Customer, OtpCode, PackCode, Rental, SmsMessage, WalletEntry
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/api")
 _rng = random.SystemRandom()
 
 
-def normalize_phone(raw: str) -> str:
+def normalize_phone(raw: str, lang: str = "fr") -> str:
     """+33 6 12 34 56 78, 06 12 34 56 78 -> +33612345678."""
     digits = re.sub(r"[^\d+]", "", raw or "")
     if digits.startswith("00"):
@@ -33,19 +34,19 @@ def normalize_phone(raw: str) -> str:
     elif not digits.startswith("+"):
         digits = "+" + digits
     if not re.fullmatch(r"\+\d{8,15}", digits):
-        raise HTTPException(400, "Numéro de téléphone invalide.")
+        raise HTTPException(400, t("invalid_phone", lang))
     return digits
 
 
 @router.post("/otp")
 def send_otp(body: OtpRequest, db: Session = Depends(get_db), services: Services = Depends(get_services),
-             settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+             settings: Settings = Depends(get_settings), lang: str = Depends(request_lang)) -> dict[str, Any]:
     """Send a 4-digit code by SMS; in demo mode it is also returned to be shown on screen."""
-    phone = normalize_phone(body.phone)
+    phone = normalize_phone(body.phone, lang)
     now = clock(db)
     code = "%04d" % _rng.randrange(10000)
     db.add(OtpCode(phone=phone, code=code, expires_t=now + settings.config["timers"]["otp_valid_s"]))
-    services.sms.send(db, phone, "Grab&Surf : ton code est %s." % code, now)
+    services.sms.send(db, phone, t("sms_code", lang, code=code), now)
     out: dict[str, Any] = {"phone": phone, "sent": True}
     if settings.demo_mode:
         out["demo_code"] = code
@@ -54,14 +55,14 @@ def send_otp(body: OtpRequest, db: Session = Depends(get_db), services: Services
 
 @router.post("/otp/verify")
 def verify_otp(body: OtpVerify, db: Session = Depends(get_db), services: Services = Depends(get_services),
-               settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+               settings: Settings = Depends(get_settings), lang: str = Depends(request_lang)) -> dict[str, Any]:
     """Check the code, create the customer if needed (with an optional referral code), return a token."""
-    phone = normalize_phone(body.phone)
+    phone = normalize_phone(body.phone, lang)
     now = clock(db)
     otp = db.scalars(select(OtpCode).where(OtpCode.phone == phone, OtpCode.used.is_(False))
                      .order_by(OtpCode.id.desc())).first()
     if otp is None or otp.code != body.code.strip() or otp.expires_t < now:
-        raise HTTPException(400, "Code incorrect ou expiré.")
+        raise HTTPException(400, t("code_invalid", lang))
     otp.used = True
     customer = db.scalar(select(Customer).where(Customer.phone == phone))
     created = customer is None
@@ -71,18 +72,18 @@ def verify_otp(body: OtpVerify, db: Session = Depends(get_db), services: Service
         pack_code, referral = referral, ""  # a pack code typed in the referral field: keep it for the rental
     if created:
         taken = set(db.scalars(select(Customer.referral_code)))
-        customer = Customer(phone=phone, referral_code=wallet.new_referral_code(_rng, taken), created_t=now)
+        customer = Customer(phone=phone, referral_code=wallet.new_referral_code(_rng, taken), created_t=now, lang=lang)
         sponsor = _find_sponsor(db, referral) if referral else None
         if referral and sponsor is None:
-            raise HTTPException(400, "Code de parrainage inconnu. Un code pack (ex. MAIF-SURF) se saisit au moment de louer.")
+            raise HTTPException(400, t("referral_unknown", lang))
         db.add(customer)
         db.flush()
         if sponsor:
             customer.referred_by_id = sponsor.id
             cents = wallet.guest_reward_cents(settings.config)
             credit(db, customer.id, cents, "referral_guest", now)
-            services.sms.send(db, phone, "Bienvenue ! %s offerts par ton parrain sur ta première session."
-                              % format_eur(cents), now)
+            services.sms.send(db, phone, t("sms_welcome_referral", lang, amount=format_eur(cents)), now)
+    customer.lang = lang
     return {"token": sign_customer(settings, customer.id), "created": created, "pack_code": pack_code,
             "profile": profile(db, customer, settings)}
 
@@ -126,7 +127,7 @@ def card_hold(body: CardHoldRequest, customer: Customer = Depends(current_custom
     try:
         last4 = services.payment.validate_card(body.card_number)
     except ValueError as e:
-        raise HTTPException(400, "Numéro de carte invalide.") from e
+        raise HTTPException(400, t("card_invalid", customer.lang)) from e
     customer.card_last4, customer.card_hold_status = last4, "authorized"
     return profile(db, customer, settings)
 

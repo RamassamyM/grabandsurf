@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { api, session } from '../../api.js'
 import { Button, Card, ErrorNote, Logo, Money, Spinner, StatusBadge, TxLink, formatDuration, usePoll } from '../../components/ui.jsx'
 
@@ -7,32 +7,65 @@ const ROLES = [['exploitant', 'Exploitant'], ['tournee', 'Tournée'], ['reparate
 const ALERT_ICONS = { theft: '🚨', not_returned: '⏱', station_offline: '📡', damage: '🩹', unknown_board: '❓' }
 
 // Operator dashboard: one page, refreshed every 2 seconds.
-export default function OperatorPage() {
-  const { data, error, reload } = usePoll(() => api.fleet(), 2000, [])
-  const [role, setRole] = useState('exploitant')
-  const [sound, setSound] = useState(false)
-  useAlarmBeep(data, sound)
+const ROLE_KEY = 'gs_operator_role'
 
-  if (error && error.status === 401) return <PinGate onSaved={reload} />
+// The validator's role (never a name), shared by the staff pages.
+export function useRole() {
+  const [role, setRoleState] = useState(() => {
+    try { return localStorage.getItem(ROLE_KEY) || 'exploitant' } catch { return 'exploitant' }
+  })
+  const setRole = (r) => { setRoleState(r); try { localStorage.setItem(ROLE_KEY, r) } catch { /* private mode */ } }
+  return [role, setRole]
+}
+
+export function StaffHeader({ role, setRole, children }) {
+  const links = [['/operator', 'Tableau de bord'], ['/operator/inspection', 'Inspection'], ['/owner', 'Propriétaire']]
   return (
-    <div className="min-h-dvh bg-sand-100">
-      <header className="bg-ocean-900 text-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+    <header className="bg-ocean-900 text-white print:hidden">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div className="flex flex-wrap items-center gap-3">
           <Link to="/" className="rounded-lg bg-white/95 px-2 py-1"><Logo small /></Link>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+          <nav className="flex gap-1 text-sm">
+            {links.map(([to, label]) => (
+              <NavLink key={to} to={to} end className={({ isActive }) =>
+                `rounded-lg px-3 py-1 ${isActive ? 'bg-white/20 font-semibold' : 'text-white/80 hover:bg-white/10'}`}>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          {setRole && (
             <label className="flex items-center gap-2">
               Rôle
               <select className="rounded-lg bg-white/10 px-2 py-1" value={role} onChange={(e) => setRole(e.target.value)}>
                 {ROLES.map(([v, l]) => <option key={v} value={v} className="text-ocean-900">{l}</option>)}
               </select>
             </label>
-            <button onClick={() => setSound(!sound)} className="rounded-lg bg-white/10 px-3 py-1">
-              {sound ? '🔔 Son activé' : '🔕 Activer le son'}
-            </button>
-            {data && <span className="text-white/70">t = {Math.round(data.now_t)} s</span>}
-          </div>
+          )}
+          {children}
         </div>
-      </header>
+      </div>
+    </header>
+  )
+}
+
+export default function OperatorPage() {
+  const { data, error, reload } = usePoll(() => api.fleet(), 2000, [])
+  const photos = usePoll(() => api.photos(), 4000, [])
+  const [role, setRole] = useRole()
+  const [sound, setSound] = useState(false)
+  useAlarmBeep(data, sound)
+
+  if (error && error.status === 401) return <PinGate onSaved={reload} />
+  return (
+    <div className="min-h-dvh bg-sand-100">
+      <StaffHeader role={role} setRole={setRole}>
+        <button onClick={() => setSound(!sound)} className="rounded-lg bg-white/10 px-3 py-1">
+          {sound ? '🔔 Son activé' : '🔕 Activer le son'}
+        </button>
+        {data && <span className="text-white/70">t = {Math.round(data.now_t)} s</span>}
+      </StaffHeader>
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-4">
         {error && <ErrorNote error={error.message} />}
@@ -47,9 +80,18 @@ export default function OperatorPage() {
                 <Stations stations={data.stations} />
               </Card>
             </div>
+            {data.deposits_to_check > 0 && (
+              <Link to="/operator/inspection" className="block">
+                <Card className="border-2 border-cork-400">
+                  <span className="font-semibold">{data.deposits_to_check} caution(s) à vérifier</span>
+                  <span className="text-sm text-ocean-700"> : valider l'état des planches rendues ou retenir un forfait de réparation. Ouvrir l'inspection ›</span>
+                </Card>
+              </Link>
+            )}
             <Alerts alerts={data.alerts} reload={reload} />
             <Boards boards={data.boards} role={role} reload={reload} />
             <DamageReports reports={data.damage_reports} role={role} reload={reload} />
+            <ReturnPhotos photos={photos.data || []} />
             <div className="grid gap-4 md:grid-cols-2">
               <Rentals rentals={data.rentals} />
               <Chain chain={data.chain} />
@@ -178,24 +220,102 @@ function Boards({ boards, role, reload }) {
   )
 }
 
+const SEVERITY = { minor: 'légère', moderate: 'moyenne', severe: 'grave' }
+const SOURCE = { photo_ai: 'IA photo', customer: 'client', inspection: 'inspection' }
+
 function DamageReports({ reports, role, reload }) {
   if (!reports.length) return null
-  const review = async (id, decision) => { await api.reviewDamage(id, decision, role); reload() }
   return (
     <Card>
       <h2 className="font-display text-xl font-semibold">Casses à valider</h2>
       <p className="text-xs text-ocean-700/80">L'IA propose, l'exploitant décide. Seul le rôle du validateur est enregistré.</p>
       <ul className="mt-3 space-y-2">
-        {reports.map((d) => (
-          <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-sand-50 p-3">
-            <span><strong className="font-mono">{d.board_id}</strong> · zone {d.zone}{d.photo_id ? ' · photo jointe' : ''}</span>
-            <span className="flex gap-2">
-              <Button className="min-h-0 px-3 py-1 text-xs" onClick={() => review(d.id, 'confirm')}>Valider la casse</Button>
-              <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs" onClick={() => review(d.id, 'reject')}>Refuser</Button>
-            </span>
-          </li>
-        ))}
+        {reports.map((d) => <DamageReview key={d.id} report={d} role={role} reload={reload} />)}
       </ul>
+    </Card>
+  )
+}
+
+export function DamageReview({ report: d, role, reload }) {
+  const [euros, setEuros] = useState((d.suggested_fee_cents / 100).toFixed(2))
+  const [charge, setCharge] = useState(Boolean(d.rental_id))
+  const [workshop, setWorkshop] = useState(d.severity !== 'minor')
+  const [error, setError] = useState(null)
+  const review = async (decision) => {
+    setError(null)
+    try {
+      await api.reviewDamage(d.id, decision, role, {
+        fee_cents: Math.round(parseFloat(String(euros).replace(',', '.')) * 100) || 0,
+        charge, send_to_workshop: workshop,
+      })
+      reload()
+    } catch (e) { setError(e.message) }
+  }
+  return (
+    <li className="flex flex-wrap items-start gap-3 rounded-xl bg-sand-50 p-3">
+      {d.photo_id && <img src={api.photoImageUrl(d.photo_id)} alt="" className="h-20 w-20 rounded-lg object-cover" />}
+      <div className="min-w-[200px] flex-1 text-sm">
+        <div><strong className="font-mono">{d.board_id}</strong> · zone {d.zone} · gravité {SEVERITY[d.severity] || d.severity} · source {SOURCE[d.source] || d.source}</div>
+        {d.description && <div className="text-ocean-700/80">{d.description}</div>}
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-1">Forfait
+            <input className="w-20 rounded-lg border border-sand-300 px-2 py-1" value={euros} onChange={(e) => setEuros(e.target.value)} /> €
+          </label>
+          {d.rental_id && (
+            <label className="flex items-center gap-1"><input type="checkbox" checked={charge} onChange={(e) => setCharge(e.target.checked)} /> retenir sur la caution</label>
+          )}
+          <label className="flex items-center gap-1"><input type="checkbox" checked={workshop} onChange={(e) => setWorkshop(e.target.checked)} /> envoyer à l'atelier</label>
+        </div>
+        <ErrorNote error={error} />
+      </div>
+      <span className="flex gap-2">
+        <Button className="min-h-0 px-3 py-1 text-xs" onClick={() => review('confirm')}>Valider la casse</Button>
+        <Button variant="ghost" className="min-h-0 px-3 py-1 text-xs" onClick={() => review('reject')}>Refuser</Button>
+      </span>
+    </li>
+  )
+}
+
+const CONDITION = { good: 'bon état', worn: 'usée', damaged: 'abîmée', unclear: 'photo peu claire' }
+
+export function PhotoDiagnosis({ photo, compact = false }) {
+  const ai = photo.ai_result || {}
+  const s = photo.suggestion || { actions: [] }
+  return (
+    <div className="flex flex-wrap gap-3 rounded-xl bg-sand-50 p-3 text-sm">
+      {photo.has_image
+        ? <a href={api.photoImageUrl(photo.id)} target="_blank" rel="noreferrer"><img src={api.photoImageUrl(photo.id)} alt="" className={`${compact ? 'h-20 w-20' : 'h-28 w-28'} rounded-lg object-cover`} /></a>
+        : <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-sand-200 text-xs">sans image</div>}
+      <div className="min-w-[200px] flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <strong className="font-mono">{photo.board_id}</strong>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ai.engine === 'claude' ? 'bg-ocean-500 text-white' : 'bg-sand-200'}`}>
+            {ai.engine === 'claude' ? 'IA Claude' : 'simulation'}
+          </span>
+          <span className="text-xs text-ocean-700/80">QR {ai.board_read || 'non lu'} · {CONDITION[ai.overall_condition] || ai.overall_condition} · confiance {Math.round((ai.confidence || 0) * 100)} %</span>
+          {photo.rewarded && <span className="text-xs text-ocean-500">+1 € crédité</span>}
+        </div>
+        {ai.summary && <p className="mt-1 text-ocean-700">{ai.summary}</p>}
+        <p className="mt-1 font-medium">{s.sentence}</p>
+        {s.actions.length > 0 && (
+          <ul className="mt-1 list-disc pl-5">
+            {s.actions.map((a, i) => (
+              <li key={i}>{a.action} ({a.zone}, gravité {SEVERITY[a.severity]}) : <Money cents={a.fee_cents} /></li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ReturnPhotos({ photos }) {
+  if (!photos.length) return null
+  return (
+    <Card>
+      <h2 className="font-display text-xl font-semibold">Photos de retour et diagnostics</h2>
+      <p className="text-xs text-ocean-700/80">Suggestions de réparation calculées avec la grille du propriétaire. Rien n'est retenu sans validation.</p>
+      <div className="mt-3 space-y-2">{photos.slice(0, 6).map((p) => <PhotoDiagnosis key={p.id} photo={p} />)}</div>
     </Card>
   )
 }
@@ -253,7 +373,7 @@ function ResetDemo({ reload }) {
   return <div className="pb-8 text-right"><Button variant="ghost" busy={busy} onClick={reset}>Remettre la démo à zéro</Button></div>
 }
 
-function PinGate({ onSaved }) {
+export function PinGate({ onSaved }) {
   const [pin, setPin] = useState('')
   return (
     <main className="mx-auto max-w-sm px-4 py-16">

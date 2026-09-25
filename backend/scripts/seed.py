@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.domain.packs import new_pack_code, pack_price_cents, split_minutes
 from backend.app.models import (Alert, AppState, Board, CardHold, ChainTx, Customer, DamageReport,
-                                Inspection, OtpCode, Pack, PackCode, Partner, Photo, Rental, SmsMessage,
+                                Inspection, OtpCode, Pack, PackCode, Partner, Photo, Rental, RepairFee, SmsMessage,
                                 Station, StationEvent, WalletEntry)
 
 WIPE_ORDER = [WalletEntry, CardHold, DamageReport, Photo, Rental, PackCode, Pack, Partner, OtpCode,
@@ -34,6 +34,9 @@ def seed(db: Session, config: dict[str, Any], rng: random.Random | None = None) 
             db.add(Station(id=sid, name=info.get("name", sid)))
         else:
             s.name, s.offline_alerted = info.get("name", sid), False
+    for zone, info in config["repairs"]["zones"].items():  # the owner's grid survives a demo reset
+        if db.get(RepairFee, zone) is None:
+            db.add(RepairFee(zone=zone, label=info["label"], fee_cents=info["fee_cents"]))
     for board_id, home in config["fleet"].items():
         db.add(Board(id=board_id, token_id=int(board_id.rsplit("-", 1)[-1]), home_station=home,
                      current_station=home, status="at_rack", status_t=now, beacon_installed_t=0.0))

@@ -47,6 +47,18 @@ class DamageReportRequest(BaseModel):
 class ReviewRequest(BaseModel):
     decision: Literal["confirm", "reject"]
     role: str = Field(default="exploitant", min_length=2, max_length=24)
+    fee_cents: Optional[int] = Field(default=None, ge=0, le=100000)  # None: the suggested fee
+    charge: bool = True                                                # withhold it from the deposit
+    send_to_workshop: Optional[bool] = None                            # None: unless the damage is minor
+
+
+class WithholdRequest(BaseModel):
+    role: str = Field(default="exploitant", min_length=2, max_length=24)
+    zone: str = Field(min_length=2, max_length=24)
+    severity: Literal["minor", "moderate", "severe"] = "moderate"
+    fee_cents: Optional[int] = Field(default=None, ge=0, le=100000)
+    description: str = Field(default="", max_length=255)
+    send_to_workshop: Optional[bool] = None
 
 
 class RoleRequest(BaseModel):

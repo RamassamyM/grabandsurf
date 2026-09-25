@@ -74,6 +74,8 @@ Pages :
 | Passeport de la planche | http://localhost:5173/p/korko-01 |
 | Exploitant | http://localhost:5173/operator |
 | Partenaire MAIF | http://localhost:5173/partner/maif |
+| Inspection des retours | http://localhost:5173/operator/inspection |
+| Propriétaire (QR, forfaits) | http://localhost:5173/owner |
 
 Scénario : inscription avec un numéro (le code SMS s'affiche en démo), carte fictive, code
 pack `MAIF-SURF`, « Prends korko-01 ». Dans le simulateur, fais partir korko-01 : le compteur
@@ -81,6 +83,24 @@ démarre. Fais partir korko-02 sans louer : l'alarme sonne et l'exploitant est a
 Raccroche korko-01 : reçu par SMS, photo de retour (+1 €), passeport, tableau MAIF.
 
 Remettre la démo à zéro : bouton en bas de la page exploitant, ou `python -m backend.scripts.seed`.
+
+## Fonctions ajoutées : photo, QR, inspection, langues
+
+- **Langues** : les pages ouvertes par QR (`/s/:station`, `/p/:board`) existent en français, anglais et
+  espagnol (sélecteur FR · EN · ES, langue du navigateur par défaut). Les erreurs de l'API et les SMS
+  suivent la langue choisie par le client. Les pages exploitant, propriétaire et partenaire restent en français.
+- **QR codes** : `/owner` génère la planche de QR à imprimer (un par rack, un par planche). Renseigne
+  l'adresse du site vue par les téléphones (IP de l'ordinateur sur le Wi-Fi, pas `localhost`).
+  Le client scanne avec la caméra du navigateur (HTTPS ou localhost requis), sinon il prend le QR en photo.
+  Sur la photo de retour, le QR de la planche est lu directement sur le téléphone.
+- **IA photo** : avec `ANTHROPIC_API_KEY` dans `.env`, la photo de retour est analysée par Claude
+  (dommages par zone et gravité). Sans clé, ou si l'API ne répond pas, le diagnostic est simulé et affiché comme tel.
+- **Forfaits de réparation** : grille par zone modifiable dans `/owner`, modulée par la gravité
+  (légère 50 %, moyenne 100 %, grave 150 %, dans `config.json`). L'exploitant voit la suggestion chiffrée
+  et décide ; rien n'est retenu sans sa validation.
+- **Caution et inspection** : au retour, seul le prix est prélevé. Le reste de la caution attend la
+  vérification sur `/operator/inspection` : valider l'état (caution libérée) ou retenir un forfait.
+  Sans action, libération automatique après 8 h ou à la location suivante de la planche sans signalement.
 
 ## 3. Tests
 

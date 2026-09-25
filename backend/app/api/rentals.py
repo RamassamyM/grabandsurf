@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..deps import current_customer, get_db, get_services, get_settings
 from ..domain import fleet
+from ..i18n import t
 from ..domain.packs import minutes_left
 from ..models import Board, CardHold, Customer, PackCode, Rental, Station
 from ..schemas import ManualReturn, RentalRequest
@@ -29,21 +30,21 @@ def arm_rental(body: RentalRequest, customer: Customer = Depends(current_custome
     """Arm a rental: the next board leaving this rack starts the meter."""
     station = db.get(Station, body.station.strip().upper())
     if station is None:
-        raise HTTPException(404, "Station inconnue.")
+        raise HTTPException(404, t("station_unknown", customer.lang))
     if customer.card_hold_status != "authorized":
-        raise HTTPException(400, "Ajoute d'abord une carte pour l'empreinte de caution.")
+        raise HTTPException(400, t("card_first", customer.lang))
     if db.scalar(select(Rental.id).where(Rental.customer_id == customer.id, Rental.status.in_(OPEN))):
-        raise HTTPException(400, "Tu as déjà une location en cours.")
+        raise HTTPException(400, t("rental_open", customer.lang))
     code = None
     if body.pack_code and body.pack_code.strip():
         code = db.scalar(select(PackCode).where(PackCode.code == body.pack_code.strip().upper()))
         if code is None:
-            raise HTTPException(400, "Code pack inconnu.")
+            raise HTTPException(400, t("pack_unknown", customer.lang))
         if minutes_left(code.minutes_quota, code.minutes_used) <= 0:
-            raise HTTPException(400, "Ce code pack est épuisé.")
+            raise HTTPException(400, t("pack_used_up", customer.lang))
     boards = available_boards(db, station.id)
     if not boards:
-        raise HTTPException(409, "Plus de planche libre à cette station. Essaie une station voisine.")
+        raise HTTPException(409, t("no_board", customer.lang))
     now = clock(db)
     rental = Rental(customer_id=customer.id, start_station=station.id, suggested_board_id=boards[0],
                     armed_t=now, status="armed", pack_code_id=code.id if code else None)
@@ -68,7 +69,7 @@ def get_rental(rental_id: int, customer: Customer = Depends(current_customer), d
                settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     r = db.get(Rental, rental_id)
     if r is None or r.customer_id != customer.id:
-        raise HTTPException(404, "Location introuvable.")
+        raise HTTPException(404, t("rental_not_found", customer.lang))
     return rental_view(db, r, settings.config, clock(db))
 
 
@@ -77,13 +78,14 @@ def cancel_rental(rental_id: int, customer: Customer = Depends(current_customer)
                   settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     r = db.get(Rental, rental_id)
     if r is None or r.customer_id != customer.id:
-        raise HTTPException(404, "Location introuvable.")
+        raise HTTPException(404, t("rental_not_found", customer.lang))
     if r.status != "armed":
-        raise HTTPException(400, "La planche est déjà partie : raccroche-la pour terminer.")
+        raise HTTPException(400, t("already_left", customer.lang))
     r.status = "cancelled"
     hold = db.scalar(select(CardHold).where(CardHold.rental_id == r.id))
     if hold:
         hold.status = "released"
+    r.deposit_status = "released"
     return rental_view(db, r, settings.config, clock(db))
 
 
@@ -94,14 +96,14 @@ def manual_return(rental_id: int, body: ManualReturn, customer: Customer = Depen
     """Backup return: rack QR + board QR prove the board is back. Never billed past this return."""
     r = db.get(Rental, rental_id)
     if r is None or r.customer_id != customer.id:
-        raise HTTPException(404, "Location introuvable.")
+        raise HTTPException(404, t("rental_not_found", customer.lang))
     if r.status not in ("active", "not_returned"):
-        raise HTTPException(400, "Cette location n'est pas en cours.")
+        raise HTTPException(400, t("not_in_progress", customer.lang))
     if body.board_qr.strip().lower() != (r.board_id or "").lower():
-        raise HTTPException(400, "Ce QR n'est pas celui de ta planche %s." % r.board_id)
+        raise HTTPException(400, t("wrong_board_qr", customer.lang, board=r.board_id))
     station = db.get(Station, body.rack_station.strip().upper())
     if station is None:
-        raise HTTPException(404, "Station inconnue.")
+        raise HTTPException(404, t("station_unknown", customer.lang))
     now = clock(db)
     board = db.get(Board, r.board_id)
     event = "RETOUR" if station.id == board.home_station else "ETRANGERE"

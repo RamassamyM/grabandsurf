@@ -13,10 +13,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select, update
 
-from .api import customers, fleet, partners, passport, photos, rentals, stations
+from .api import customers, fleet, inspections, owner, partners, passport, photos, rentals, stations
+from .i18n import request_lang, t
 from .db import create_tables, make_engine, make_sessionmaker
 from .models import Board, ChainTx
-from .services import Alarm, ChainService, DemoSms, FakePayment, FakePhotoAI, Services
+from .services import Alarm, ChainService, DemoSms, FakePayment, Services
+from .services.photo_ai import build_photo_ai
 from .settings import Settings, load_settings
 
 log = logging.getLogger(__name__)
@@ -24,7 +26,8 @@ log = logging.getLogger(__name__)
 
 def build_services(settings: Settings) -> Services:
     """Real or fake versions, chosen by the settings."""
-    return Services(sms=DemoSms(), payment=FakePayment(), photo_ai=FakePhotoAI(),
+    return Services(sms=DemoSms(), payment=FakePayment(),
+                    photo_ai=build_photo_ai(settings.env.get("PHOTO_AI", "auto"), settings.env, settings.config),
                     alarm=Alarm(sound=settings.alarm_sound),
                     chain=ChainService(settings.chain_mode, settings.env, settings.data_dir))
 
@@ -61,12 +64,13 @@ def create_app(settings: Optional[Settings] = None, services: Optional[Services]
     app.state.engine = engine
 
     @app.exception_handler(RequestValidationError)
-    async def _invalid(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def _invalid(request: Request, exc: RequestValidationError) -> JSONResponse:
         first = exc.errors()[0] if exc.errors() else {}
         field = ".".join(str(x) for x in first.get("loc", [])[1:])
-        return JSONResponse({"detail": "Requête invalide : %s" % (field or "format")}, status_code=400)
+        lang = request_lang(request.headers.get("x-lang", ""), request.headers.get("accept-language", ""))
+        return JSONResponse({"detail": t("invalid_request", lang, field=field or "format")}, status_code=400)
 
-    for module in (stations, customers, rentals, partners, fleet, photos, passport):
+    for module in (stations, customers, rentals, partners, fleet, photos, passport, owner, inspections):
         app.include_router(module.router)
 
     dist = settings.frontend_dist
