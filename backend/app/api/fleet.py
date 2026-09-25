@@ -61,6 +61,7 @@ def fleet_view(db: Session = Depends(get_db), services: Services = Depends(get_s
     txs = db.scalars(select(ChainTx).order_by(ChainTx.id.desc()).limit(12)).all()
     return {
         "now_t": now, "boards": boards, "stations": stations, "alerts": alerts, "damage_reports": damages,
+        "station_offline_after_s": settings.config["timers"]["station_offline_after_s"],
         "missions": _missions(db, settings, now),
         "deposits_to_check": db.scalar(select(func.count(Rental.id)).where(Rental.deposit_status == "pending_check")),
         "revenue_cents": int(revenue), "revenue_label": format_eur(int(revenue)),

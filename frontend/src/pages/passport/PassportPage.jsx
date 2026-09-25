@@ -10,9 +10,10 @@ import { ErrorNote, IconBubble, Spinner, StatusBadge, TxLink, usePoll } from '@/
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useT } from '@/i18n.jsx'
 import { cn } from '@/lib/utils'
-import { ReturnPhotos } from '../client/Receipts.jsx'
+import { PhotoOffer, photosOffered } from '../client/Receipts.jsx'
 
 const ZONES = ['nose', 'tail', 'rail', 'fin', 'deck']
 
@@ -62,19 +63,24 @@ export default function PassportPage() {
         </div>
 
         {mine && mine.status !== 'armed' && <ReturnHere rental={mine} board={b.id} reload={me.reload} />}
-        {!mine && lastMine && lastMine.status === 'returned' && !lastMine.photo_taken && (
-          <Card><CardContent className="pt-1"><ReturnPhotos rental={lastMine} reload={me.reload} /></CardContent></Card>
+        {!mine && photosOffered(lastMine) && (
+          <PhotoOffer rental={lastMine} rewardCents={me.data?.rewards?.return_photo_cents} reload={me.reload} />
         )}
 
         {data.sponsorship && <SponsorCard sp={data.sponsorship} />}
 
         {data.ambassador && (
-          <div className="rounded-3xl bg-navy p-5 text-white shadow-soft">
-            <div className="text-xs font-bold uppercase tracking-widest text-lagoon">{t('ambassador')}</div>
-            <div className="mt-1 text-2xl font-extrabold">{data.ambassador.name}</div>
-            <div className="text-sm text-white/70">{data.ambassador.tagline}</div>
-            <p className="mt-3 font-script text-xl leading-snug text-sun">« {data.ambassador.story} »</p>
-            <p className="mt-2 text-xs text-white/50">{t('fictional')}</p>
+          <div className="overflow-hidden rounded-3xl bg-navy text-white shadow-soft">
+            {data.ambassador.photo && (
+              <img src={data.ambassador.photo} alt={data.ambassador.name} className="aspect-[5/4] w-full object-cover" />
+            )}
+            <div className="p-5">
+              <div className="text-xs font-bold uppercase tracking-widest text-lagoon">{t('ambassador')}</div>
+              <div className="mt-1 text-2xl font-extrabold">{data.ambassador.name}</div>
+              <div className="text-sm text-white/70">{data.ambassador.tagline}</div>
+              {data.ambassador.story && <p className="mt-3 font-script text-xl leading-snug text-sun">« {data.ambassador.story} »</p>}
+              {data.ambassador.fictional !== false && <p className="mt-2 text-xs text-white/50">{t('fictional')}</p>}
+            </div>
           </div>
         )}
 
@@ -102,7 +108,7 @@ export default function PassportPage() {
         </Card>
 
         <PhotoCheck history={data.history} />
-        <ShareButton board={b.id} />
+        <ShareButton board={b.id} image={data.ambassador?.share_image} />
         <DamageCard board={b.id} />
       </main>
     </div>
@@ -281,17 +287,38 @@ function SponsorCard({ sp }) {
   )
 }
 
-function ShareButton({ board }) {
+// Shares the passport; with a story image, the image shows first in a popup and is shared along.
+function ShareButton({ board, image }) {
   const { t } = useT()
   const [done, setDone] = useState(false)
+  const [open, setOpen] = useState(false)
   const share = async () => {
     const text = t('story_text', { board })
+    const url = window.location.href
     try {
-      if (navigator.share) await navigator.share({ title: 'Grab&Surf', text, url: window.location.href })
-      else { await navigator.clipboard.writeText(`${text} ${window.location.href}`); setDone(true) }
+      if (image && navigator.canShare) {
+        const blob = await (await fetch(image)).blob()
+        const file = new File([blob], `${board}.jpg`, { type: blob.type })
+        if (navigator.canShare({ files: [file] })) { await navigator.share({ title: 'Grab&Surf', text, url, files: [file] }); return }
+      }
+      if (navigator.share) await navigator.share({ title: 'Grab&Surf', text, url })
+      else { await navigator.clipboard.writeText(`${text} ${url}`); setDone(true) }
     } catch { /* closed */ }
   }
-  return <Button variant="sun" size="lg" className="w-full" onClick={share}><Share2 /> {done ? t('link_copied') : t('share_story')}</Button>
+  const label = done ? t('link_copied') : t('share_story')
+  if (!image) return <Button variant="sun" size="lg" className="w-full" onClick={share}><Share2 /> {label}</Button>
+  return (
+    <>
+      <Button variant="sun" size="lg" className="w-full" onClick={() => setOpen(true)}><Share2 /> {t('share_story')}</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="w-[min(88vw,24rem)] max-w-none justify-items-center gap-4 border-0 bg-transparent p-0 shadow-none [&>button]:-right-1 [&>button]:-top-8 [&>button]:text-white">
+          <DialogTitle className="sr-only">{t('share_story')}</DialogTitle>
+          <img src={image} alt={t('share_story')} className="max-h-[76dvh] w-auto rounded-[11%/6%] shadow-2xl" />
+          <Button variant="sun" size="lg" className="w-full" onClick={share}><Share2 /> {label}</Button>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
 }
 
 function ReturnHere({ rental, board, reload }) {

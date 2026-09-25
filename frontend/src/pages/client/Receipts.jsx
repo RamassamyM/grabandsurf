@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { AlertTriangle, Camera, Check, CheckCircle2, ChevronDown, Loader2, QrCode } from 'lucide-react'
-import { api } from '@/api.js'
+import { Camera, CheckCircle2, ChevronDown, Loader2, QrCode } from 'lucide-react'
+import { api, session } from '@/api.js'
 import { ErrorNote, IconBubble, Money, fileToBase64 } from '@/components/common.jsx'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { useT } from '@/i18n.jsx'
 import { cn } from '@/lib/utils'
@@ -11,48 +12,41 @@ import { decodeImageFile, parseQr } from '@/qr.js'
 const SHOTS = ['front', 'back', 'fins', 'board_qr', 'slot_qr', 'station_qr']
 const QR_SHOTS = ['board_qr', 'slot_qr', 'station_qr']
 
-export function photosPending(rental) {
-  return rental.status === 'returned' && rental.receipt?.deposit_status === 'pending_check' && !rental.photo_taken
+// The optional return photos are offered for a returned rental, unless declined on this phone.
+export function photosOffered(rental) {
+  return Boolean(rental) && rental.status === 'returned' && !session.photosDeclined(rental.id)
 }
 
-// Every receipt of the customer, newest first; open by default: the latest one and those still waiting for photos.
-export function ReceiptList({ history, reload }) {
+// Every receipt of the customer, newest first; the latest one open.
+export function ReceiptList({ history }) {
   const { t } = useT()
   const receipts = history.filter((r) => r.receipt)
   if (!receipts.length) return <p className="py-6 text-center text-sm text-muted-foreground">{t('receipts_empty')}</p>
   return (
     <div className="space-y-3">
-      {receipts.map((r, i) => <ReceiptCard key={r.id} rental={r} reload={reload} defaultOpen={i === 0 || photosPending(r)} />)}
+      {receipts.map((r, i) => <ReceiptCard key={r.id} rental={r} defaultOpen={i === 0} />)}
     </div>
   )
 }
 
-function ReceiptCard({ rental, reload, defaultOpen }) {
+function ReceiptCard({ rental, defaultOpen }) {
   const { t } = useT()
   const [open, setOpen] = useState(defaultOpen)
   const r = rental.receipt
-  const pending = photosPending(rental)
-  const deposit = pending ? t('deposit_waiting_photo') : ({
+  const deposit = {
     pending_check: t('deposit_pending'), released: t('deposit_released'),
     charged: t('deposit_charged'), bought: t('deposit_bought'),
-  }[r.deposit_status] || t('deposit_pending'))
+  }[r.deposit_status] || t('deposit_pending')
   return (
-    <div className={cn('overflow-hidden rounded-2xl border bg-card shadow-soft', pending && 'border-coral/40')}>
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-soft">
       <button onClick={() => setOpen(!open)} aria-expanded={open}
         className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-muted/50">
-        <IconBubble icon={pending ? AlertTriangle : CheckCircle2} tone={pending ? 'coral' : 'foam'} />
+        <IconBubble icon={CheckCircle2} tone="foam" />
         <div className="min-w-0 flex-1">
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('receipt_number', { id: rental.id })}</div>
           <div className="font-extrabold"><span className="font-mono">{rental.board_id}</span> · {r.duration_label}</div>
         </div>
-        <div className="text-right">
-          <div className="text-lg font-extrabold"><Money cents={r.charged_cents} /></div>
-          {pending && (
-            <Badge variant="coral" className="text-[10px]">
-              {t('photos_progress', { done: SHOTS.length - (rental.photos_missing || SHOTS).length, total: SHOTS.length })}
-            </Badge>
-          )}
-        </div>
+        <div className="text-lg font-extrabold"><Money cents={r.charged_cents} /></div>
         <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition', open && 'rotate-180')} />
       </button>
       {open && (
@@ -62,11 +56,10 @@ function ReceiptCard({ rental, reload, defaultOpen }) {
             <Row label={t('duration')} value={r.duration_label} />
             {r.pack_minutes > 0 && <Row label={t('pack_line')} value={`${r.pack_minutes} min`} />}
             {r.wallet_used_cents > 0 && <Row label={t('wallet_line')} value={<>- <Money cents={r.wallet_used_cents} /></>} />}
-            <Row label={t('deposit')} value={<span className={cn(pending && 'text-coral')}>{deposit}</span>} />
+            <Row label={t('deposit')} value={deposit} />
             {rental.return_mode === 'manual' && <Row label={t('return_qr')} value={t('by_qr')} />}
             <Row label={t('paid')} value={<span className="text-lg font-extrabold"><Money cents={r.charged_cents} /></span>} />
           </dl>
-          {rental.status === 'returned' && <ReturnPhotos rental={rental} reload={reload} />}
         </div>
       )}
     </div>
@@ -96,85 +89,113 @@ function checkQr(shot, parsed, rental) {
   return [null, parsed ? ['qr_wrong_slot', { station }] : ['qr_not_found', {}]]
 }
 
-// The 6 return shots: front, back, fins, then the QR codes of the board, of the slot and of the station.
-export function ReturnPhotos({ rental, reload }) {
+function rewardLabel(cents, lang) {
+  return new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR', minimumFractionDigits: cents % 100 ? 2 : 0 })
+    .format(cents / 100)
+}
+
+// The return photo reward: "+1 €".
+export function RewardTag({ cents, className = '' }) {
+  const { lang } = useT()
+  return (
+    <span className={cn('shrink-0 rounded-full bg-sun px-2.5 py-0.5 text-sm font-extrabold tabular-nums text-navy', className)}>
+      +{rewardLabel(cents, lang)}
+    </span>
+  )
+}
+
+// A small optional offer: take the photos (+1 €) or say no thanks.
+export function PhotoOffer({ rental, rewardCents, reload }) {
+  const { t, lang } = useT()
+  const [open, setOpen] = useState(false)
+  const [declined, setDeclined] = useState(false)
+  const done = SHOTS.length - (rental.photos_missing || SHOTS).length
+  const decline = () => { session.declinePhotos(rental.id); setDeclined(true) }
+  const close = (value) => { setOpen(value); if (!value && reload) reload() }
+  // stays mounted while the flow is open, so its last screen shows even once the photos are all in
+  if (declined || (rental.photo_taken && !open)) return null
+  return (
+    <div className="rounded-2xl border bg-card p-4 shadow-soft">
+      <p className="font-extrabold">{t('photo_offer_title', { amount: rewardLabel(rewardCents || 0, lang) })}</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">{t('photo_offer_text')}</p>
+      <div className="mt-3 flex gap-2">
+        <Button className="flex-1" onClick={() => setOpen(true)}>
+          <Camera /> {done ? t('photo_offer_continue', { done, total: SHOTS.length }) : t('photo_offer_start')}
+        </Button>
+        <Button variant="ghost" onClick={decline}>{t('photo_offer_decline')}</Button>
+      </div>
+      <Dialog open={open} onOpenChange={close}>
+        {open && <PhotoFlow rental={rental} onClose={() => close(false)} />}
+      </Dialog>
+    </div>
+  )
+}
+
+// One photo per screen, in order: front, back, fins, then the QR codes of the board, of the slot and of the station.
+function PhotoFlow({ rental, onClose }) {
   const { t } = useT()
-  const [busy, setBusy] = useState(null)
-  const [errors, setErrors] = useState({})
-  const [message, setMessage] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
   const [justDone, setJustDone] = useState([])
+  const [earned, setEarned] = useState(0)
   const missing = (rental.photos_missing || SHOTS).filter((s) => !justDone.includes(s))
-  const done = SHOTS.length - missing.length
-  if (!missing.length) {
-    return (
-      <p className="mt-4 flex items-center gap-2 rounded-xl bg-foam p-3 text-sm font-bold text-ocean-700">
-        <CheckCircle2 className="h-4 w-4 shrink-0" /> {message || t('photos_done')}
-      </p>
-    )
-  }
-  const take = async (shot, file) => {
-    if (!file) return
-    setBusy(shot); setErrors((e) => ({ ...e, [shot]: null }))
+  const shot = missing[0]
+  const step = SHOTS.length - missing.length + 1
+  const take = async (file) => {
+    if (!file || !shot) return
+    setBusy(true); setError(null)
     try {
       let qr = null
       if (QR_SHOTS.includes(shot)) {
         const [value, problem] = checkQr(shot, parseQr(await decodeImageFile(file)), rental)
-        if (problem) { setErrors((e) => ({ ...e, [shot]: t(problem[0], problem[1]) })); return }
+        if (problem) { setError(t(problem[0], problem[1])); return }
         qr = value
       }
       const out = await api.uploadPhoto(rental.id, shot, qr, await fileToBase64(file))
+      if (out.credited_cents) setEarned(out.credited_cents)
       setJustDone((d) => [...d, shot])
-      setMessage(out.message)
-      if (reload) await reload()
     } catch (err) {
-      setErrors((e) => ({ ...e, [shot]: err.message }))
+      setError(err.message)
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
   return (
-    <div className="mt-4 space-y-3 rounded-2xl border-2 border-dashed border-sun/60 bg-sun/5 p-4">
-      <div className="flex items-start gap-3">
-        <IconBubble icon={Camera} tone="sun" />
-        <div className="flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-extrabold">{t('photos_title')}</p>
-            <span className="text-sm font-bold">{t('photos_progress', { done, total: SHOTS.length })}</span>
+    <DialogContent className="flex h-dvh w-full max-w-none flex-col gap-0 rounded-none p-0 sm:h-auto sm:max-w-md sm:rounded-2xl">
+      {shot ? (
+        <>
+          <div className="space-y-2 p-5 pb-0">
+            <p className="text-sm font-bold text-muted-foreground">{t('photo_step', { n: step, total: SHOTS.length })}</p>
+            <Progress value={((step - 1) / SHOTS.length) * 100} className="h-1.5 [&>div]:bg-sun" />
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">{t('photos_text')}</p>
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-foam text-navy">
+              {QR_SHOTS.includes(shot) ? <QrCode className="h-9 w-9" /> : <Camera className="h-9 w-9" />}
+            </span>
+            <DialogTitle className="text-2xl font-extrabold">{t(`shot_${shot}`)}</DialogTitle>
+            <DialogDescription className="text-base">
+              {t(`shot_${shot}_hint`, { board: rental.board_id, station: rental.end_station || '' })}
+            </DialogDescription>
+            {error && <ErrorNote error={error} />}
+          </div>
+          <div className="p-5">
+            <input id="return-shot" type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { take(e.target.files?.[0]); e.target.value = '' }} />
+            <Button size="lg" className="h-14 w-full text-base" disabled={busy}
+              onClick={() => document.getElementById('return-shot').click()}>
+              {busy ? <Loader2 className="animate-spin" /> : <Camera />} {t('take_photo')}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+          <CheckCircle2 className="h-14 w-14 text-ocean" />
+          <DialogTitle className="text-2xl font-extrabold">{t('photos_done')}</DialogTitle>
+          <DialogDescription className="text-base">{earned ? t('reward_earned_text') : ''}</DialogDescription>
+          {earned > 0 && <RewardTag cents={earned} className="text-lg" />}
+          <Button size="lg" className="mt-4 w-full" onClick={onClose}>{t('photos_finish')}</Button>
         </div>
-      </div>
-      <Progress value={(done / SHOTS.length) * 100} className="h-2 bg-white [&>div]:bg-sun" />
-      <ol className="space-y-2">
-        {SHOTS.map((shot) => {
-          const ok = !missing.includes(shot)
-          const inputId = `shot-${rental.id}-${shot}`
-          return (
-            <li key={shot}>
-              <input id={inputId} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={(e) => { take(shot, e.target.files?.[0]); e.target.value = '' }} />
-              <button type="button" disabled={ok || busy !== null} onClick={() => document.getElementById(inputId).click()}
-                className={cn('flex w-full items-center gap-3 rounded-xl border bg-white p-3 text-left transition',
-                  ok ? 'border-ocean/30 bg-foam/60' : 'hover:border-navy/40 active:scale-[.99]',
-                  errors[shot] && 'border-coral/50')}>
-                <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                  ok ? 'bg-ocean text-white' : 'bg-navy text-sun')}>
-                  {busy === shot ? <Loader2 className="h-4 w-4 animate-spin" /> : ok ? <Check className="h-4 w-4" />
-                    : QR_SHOTS.includes(shot) ? <QrCode className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold">{t(`shot_${shot}`)}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {t(`shot_${shot}_hint`, { board: rental.board_id, station: rental.end_station || '' })}
-                  </span>
-                </span>
-              </button>
-              {errors[shot] && <ErrorNote error={errors[shot]} className="mt-1" />}
-            </li>
-          )
-        })}
-      </ol>
-      {message && <p className="text-xs font-bold text-ocean-700">{message}</p>}
-    </div>
+      )}
+    </DialogContent>
   )
 }

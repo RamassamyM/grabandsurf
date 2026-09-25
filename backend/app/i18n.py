@@ -139,9 +139,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Wallet used: {amount}.",
         "es": "Monedero usado: {amount}."},
     "sms_receipt_end": {
-        "fr": "Dernière étape : prends ta planche en photo avec son QR gravé, sinon ta caution n'est pas libérée (1 € offert) : {link}",
-        "en": "Last step: take a photo of your board with its engraved QR code, or your deposit is not released (1 € off): {link}",
-        "es": "Último paso: hazle una foto a tu tabla con su QR grabado, si no tu fianza no se libera (1 € de regalo): {link}"},
+        "fr": "Envie de 1 € offert ? Prends ta planche en photo, c'est facultatif : {link}",
+        "en": "Want 1 € off? Take a few photos of your board, it's optional: {link}",
+        "es": "¿Quieres 1 € de regalo? Hazle unas fotos a tu tabla, es opcional: {link}"},
     "sms_deposit_released": {
         "fr": "Planche {board} vérifiée : ta caution est libérée. Merci et à bientôt sur l'eau !",
         "en": "Board {board} checked: your deposit is released. Thank you, see you on the water!",

@@ -6,6 +6,7 @@ const PHONE_KEY = 'gs_phone'
 const PIN_KEY = 'gs_operator_pin'
 const RACK_KEY = 'gs_last_rack'
 const PACK_KEY = 'gs_pending_pack'
+const NO_PHOTOS_KEY = 'gs_no_photos'
 
 function safeGet(key) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -28,6 +29,9 @@ export const session = {
   setPendingPack: (code) => safeSet(PACK_KEY, code || null),
   pin: () => safeGet(PIN_KEY) || '',
   setPin: (pin) => safeSet(PIN_KEY, pin),
+  // Return photos are optional: rentals whose photos the customer declined, on this phone.
+  photosDeclined: (rentalId) => (safeGet(NO_PHOTOS_KEY) || '').split(',').includes(String(rentalId)),
+  declinePhotos: (rentalId) => safeSet(NO_PHOTOS_KEY, [...(safeGet(NO_PHOTOS_KEY) || '').split(',').filter(Boolean).slice(-19), rentalId].join(',')),
   // Backup return needs a rack QR scanned in the last 5 minutes (kept in this browser).
   rememberRack: (station) => safeSet(RACK_KEY, JSON.stringify({ station, at: Date.now() })),
   recentRack: () => {

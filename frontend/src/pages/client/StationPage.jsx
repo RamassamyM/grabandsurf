@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useT } from '@/i18n.jsx'
 import { cn } from '@/lib/utils'
-import { ReceiptList, photosPending } from './Receipts.jsx'
+import { PhotoOffer, ReceiptList, photosOffered } from './Receipts.jsx'
 
 // Customer journey at a rack: sign up once, then rent in 2 gestures.
 export default function StationPage() {
@@ -228,47 +228,30 @@ function Rental({ station, me, reload, available }) {
   if (current && current.status === 'armed') return <Armed rental={current} reload={reload} />
   if (current) return <Live rental={current} station={station} reload={reload} />
   if (!last || !last.receipt) return <RentForm station={station} reload={reload} available={available} />
-  // After a return: "Surf" starts a new session, "Receipt" keeps the last one, its photo and the referral.
+  // After a return: "Surf" starts a new session, "Receipt" keeps the receipts and the referral.
   const tab = params.get('tab') === 'receipt' ? 'receipt' : 'surf'
   const setTab = (value) => setParams((p) => {
     const next = new URLSearchParams(p)
     if (value === 'receipt') next.set('tab', 'receipt'); else next.delete('tab')
     return next
   }, { replace: true })
-  const missing = me.history.find(photosPending)
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+      {photosOffered(last) && <PhotoOffer rental={last} rewardCents={me.rewards?.return_photo_cents} reload={reload} />}
       <TabsList className="grid h-12 w-full grid-cols-2">
         <TabsTrigger value="surf" className="h-full gap-2"><WavesIcon className="h-4 w-4" /> {t('tab_surf')}</TabsTrigger>
         <TabsTrigger value="receipt" className="h-full gap-2">
           <ReceiptIcon className="h-4 w-4" /> {t('tab_receipt')}
-          {missing && <span className="h-2 w-2 rounded-full bg-coral" aria-hidden />}
         </TabsTrigger>
       </TabsList>
       <TabsContent value="surf" className="mt-0 space-y-4">
-        {missing && <PhotoMissing rental={missing} onOpen={() => setTab('receipt')} />}
         <RentForm station={station} reload={reload} available={available} />
       </TabsContent>
       <TabsContent value="receipt" className="mt-0 space-y-4">
-        <ReceiptList history={me.history} reload={reload} />
+        <ReceiptList history={me.history} />
         <ReferralCard me={me} station={station} />
       </TabsContent>
     </Tabs>
-  )
-}
-
-// The deposit waits for the photo of the rented board: say it until it is done.
-function PhotoMissing({ rental, onOpen }) {
-  const { t } = useT()
-  return (
-    <div role="alert" className="flex items-start gap-3 rounded-2xl border border-coral/30 bg-coral-50 p-4">
-      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-coral" />
-      <div className="flex-1">
-        <div className="font-extrabold text-coral">{t('photo_missing_title')}</div>
-        <p className="mt-0.5 text-sm text-navy/80">{t('photo_missing_text', { board: rental.board_id })}</p>
-        <Button size="sm" variant="destructive" className="mt-3" onClick={onOpen}><Camera /> {t('photo_missing_cta')}</Button>
-      </div>
-    </div>
   )
 }
 

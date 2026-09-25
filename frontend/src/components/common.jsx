@@ -4,7 +4,6 @@ import { api, isEmbedded } from '@/api.js'
 import { useT } from '@/i18n.jsx'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -44,19 +43,27 @@ export function formatDuration(seconds) {
   return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`
 }
 
-const STATUS_VARIANTS = {
-  at_rack: 'ocean',
-  away_from_home: 'sun',
-  at_sea: 'ocean',
-  unauthorized: 'destructive',
-  not_returned: 'coral',
-  workshop: 'sun',
-  lost: 'navy',
-  sold: 'navy',
+// One solid color per board state, so the fleet reads at a glance.
+export const STATUS_COLORS = {
+  at_rack: { badge: 'bg-ocean text-white', edge: 'border-l-ocean' },
+  at_sea: { badge: 'bg-sun text-navy', edge: 'border-l-sun' },
+  away_from_home: { badge: 'bg-sand text-cork-700', edge: 'border-l-sand' },
+  unauthorized: { badge: 'bg-coral text-white', edge: 'border-l-coral' },
+  not_returned: { badge: 'bg-coral text-white', edge: 'border-l-coral' },
+  workshop: { badge: 'bg-cork text-white', edge: 'border-l-cork' },
+  lost: { badge: 'bg-navy text-white', edge: 'border-l-navy' },
+  sold: { badge: 'bg-navy text-white', edge: 'border-l-navy' },
 }
+const ALARM_STATUSES = ['unauthorized', 'not_returned']
 
 export function StatusBadge({ status, label, className = '' }) {
-  return <Badge variant={STATUS_VARIANTS[status] || 'muted'} className={className}>{label || status}</Badge>
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold',
+      STATUS_COLORS[status]?.badge || 'bg-muted text-muted-foreground', className)}>
+      <span className={cn('h-1.5 w-1.5 rounded-full bg-current', ALARM_STATUSES.includes(status) && 'animate-pulse')} />
+      {label || status}
+    </span>
+  )
 }
 
 export function TxLink({ hash, url }) {

@@ -53,6 +53,15 @@ def get_clock(db: Session) -> float:
     return float(row.value) if row and row.value else 0.0
 
 
+def restart_clock(db: Session, t: float) -> None:
+    """Move the flow clock back to t: only when the flow itself restarted."""
+    row = db.get(AppState, "clock")
+    if row is None:
+        row = AppState(key="clock")
+        db.add(row)
+    row.value = repr(float(t))
+
+
 def advance_clock(db: Session, t: float) -> float:
     """Move the flow clock forward (never backward) and return it."""
     row = db.get(AppState, "clock")

@@ -39,7 +39,7 @@ def session_view(db: Session, r: Rental, settings: Settings, now: float) -> dict
         "photo_missing": not has_return_photo(db, r),
         "photos_missing": return_photos.missing_shots(return_shots(db, r)),
         "auto_release_in": format_duration(max(0, r.deposit_due_t - now))
-        if r.deposit_due_t and r.deposit_status == "pending_check" and has_return_photo(db, r) else None,
+        if r.deposit_due_t and r.deposit_status == "pending_check" else None,
         "checked_role": r.checked_role,
         "photos": [photo_view(db, p, settings) for p in photos],
         "damage_reports": [{"id": d.id, "zone": d.zone, "severity": d.severity, "status": d.status,

@@ -1,8 +1,10 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
-from backend.app.services.chain import ChainService, chain_config, read_deployment, token_id
+from backend.app.services.chain import ChainHistory, ChainService, chain_config, read_deployment, token_id
 from backend.app.settings import normalize_chain_mode
 
 
@@ -90,3 +92,20 @@ class RealModeTest(unittest.TestCase):
 
     def test_network_error_is_retried(self):
         self.assertEqual(self.run_publish(True)["n"], 2)
+
+
+class ChainHistoryCacheTest(unittest.TestCase):
+    ADDRESS = "0x1A3f999DC10eaA90676f9cF907049C511A5C1903"
+
+    def history_from(self, cached_to: int, block: int) -> int:
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "chain_logs_1a3f999d.json").write_text(json.dumps({"scanned_to": cached_to, "events": []}))
+        w3 = SimpleNamespace(eth=SimpleNamespace(contract=lambda address, abi: None))
+        history = ChainHistory(w3, [{"address": self.ADDRESS, "version": 1, "block": block}], tmp)
+        return history.readers[0]["state"]["scanned_to"]
+
+    def test_cache_behind_the_deployment_block_jumps_to_it(self):
+        self.assertEqual(self.history_from(cached_to=24_000_000, block=58_681_491), 58_681_490)
+
+    def test_cache_ahead_of_the_deployment_block_is_kept(self):
+        self.assertEqual(self.history_from(cached_to=58_700_000, block=58_681_491), 58_700_000)

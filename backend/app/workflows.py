@@ -7,12 +7,13 @@ from domain/, effects from services/, and the time is always the flow clock.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .db import advance_clock, get_clock
+from .db import advance_clock, get_clock, restart_clock
 from .domain import fleet, pricing, return_photos, wallet
 from .domain.fleet import STATUS_LABELS, format_duration
 from .domain.packs import minutes_left
@@ -23,6 +24,8 @@ from .models import (Alert, Board, CardHold, ChainTx, Customer, DamageReport, In
 from .i18n import t as tr
 from .i18n import zone_name
 from .services import Services
+
+log = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------ small helpers
@@ -117,7 +120,7 @@ def return_shots(db: Session, rental: Rental) -> list[str]:
 
 
 def has_return_photo(db: Session, rental: Rental) -> bool:
-    """All the return shots were sent: the deposit may be freed."""
+    """All the return shots were sent (optional: they only earn the photo reward)."""
     return return_photos.complete(return_shots(db, rental))
 
 
@@ -249,6 +252,7 @@ def process_event(db: Session, services: Services, config: dict[str, Any],
                   ev: fleet.StationEvent) -> dict[str, Any]:
     """Apply one station event. Returns {"duplicate": bool, "alarm": [board ids]}."""
     first_event = get_clock(db) == 0
+    _detect_flow_restart(db, config, ev)
     now = advance_clock(db, ev.t)
     if first_event:  # a real station speaks in epoch seconds: start the boards' clocks there
         for b in db.scalars(select(Board).where(Board.status_t == 0)):
@@ -287,6 +291,17 @@ def process_event(db: Session, services: Services, config: dict[str, Any],
     return result
 
 
+def _detect_flow_restart(db: Session, config: dict[str, Any], ev: fleet.StationEvent) -> None:
+    """A live TIC far behind the clock means the flow restarted (simulator relaunched): follow it back."""
+    clock_t = get_clock(db)
+    if ev.type != "TIC" or clock_t - ev.t <= config["timers"]["station_offline_after_s"]:
+        return
+    log.warning("station flow restarted: clock moved back from %s to %s", clock_t, ev.t)
+    restart_clock(db, ev.t)
+    for s in db.scalars(select(Station).where(Station.last_seen_t > ev.t)):
+        s.last_seen_t = ev.t
+
+
 def _on_departure(db: Session, services: Services, board: Board, ev: fleet.StationEvent,
                   result: dict[str, Any]) -> None:
     board.rentals_count += 1
@@ -306,7 +321,7 @@ def _on_departure(db: Session, services: Services, board: Board, ev: fleet.Stati
     # next rental without a damage report: the previous renter's deposit is freed
     for previous in db.scalars(select(Rental).where(Rental.board_id == board.id, Rental.id != armed.id,
                                                     Rental.deposit_status == "pending_check")):
-        if not open_damage_reports(db, previous) and has_return_photo(db, previous):
+        if not open_damage_reports(db, previous):
             release_deposit(db, services, previous, "next_rental", ev.t)
     sms_to(db, services, armed.customer_id, "sms_departure", ev.t, board=board.id)
     record_chain(db, board.id, "DEPART", ev.station, ev.t, armed.id)
@@ -343,8 +358,7 @@ def run_timers(db: Session, services: Services, config: dict[str, Any], now: flo
             sms_to(db, services, r.customer_id, "sms_reminder", now, duration=format_duration(now - r.start_t),
                    board=r.board_id, amount=format_eur(config["pricing"]["day_pass_cents"]))
     for r in db.scalars(select(Rental).where(Rental.deposit_status == "pending_check")):
-        if r.deposit_due_t is not None and now >= r.deposit_due_t and not open_damage_reports(db, r) \
-                and has_return_photo(db, r):
+        if r.deposit_due_t is not None and now >= r.deposit_due_t and not open_damage_reports(db, r):
             release_deposit(db, services, r, "auto_8h", now)
     for s in db.scalars(select(Station)):
         if fleet.station_online(s.last_seen_t, now, config) is False and not s.offline_alerted:

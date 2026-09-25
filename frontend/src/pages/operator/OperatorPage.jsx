@@ -7,7 +7,7 @@ import {
 import { api } from '@/api.js'
 import { PageTitle, PinGate, StaffLayout, useRole } from '@/components/Layout.jsx'
 import {
-  ConfirmDialog, ErrorNote, Money, Spinner, Stat, StatusBadge, TxLink, formatDuration, usePoll,
+  ConfirmDialog, ErrorNote, Money, STATUS_COLORS, Spinner, Stat, StatusBadge, TxLink, formatDuration, usePoll,
 } from '@/components/common.jsx'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ export default function OperatorPage() {
   const [role, setRole] = useRole()
   const [sound, setSound] = useState(false)
   useAlarmBeep(data, sound)
+  const stations = useStationWatch(data)
 
   if (error && error.status === 401) return <PinGate onSaved={reload} />
   const boards = data?.boards || []
@@ -46,6 +47,7 @@ export default function OperatorPage() {
       {error && <ErrorNote error={error.message} />}
       {!data ? <Spinner /> : (
         <>
+          <StationsDownBanner stations={stations} />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat tone="navy" icon={Coins} label="Chiffre d'affaires" value={<Money cents={data.revenue_cents} />} />
             <Stat icon={CheckCircle2} label="Au rack" value={`${count('at_rack', 'away_from_home')} / ${boards.length}`} />
@@ -55,7 +57,7 @@ export default function OperatorPage() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             <Missions missions={data.missions} />
-            <Stations stations={data.stations} />
+            <Stations stations={stations} />
           </div>
 
           {data.deposits_to_check > 0 && (
@@ -124,18 +126,56 @@ function Missions({ missions }) {
   )
 }
 
+// A silent feed freezes the flow clock (now_t), so a dead station never looks late in flow time.
+// The dashboard also watches, in wall-clock time, how long each station's last_seen_t has not moved.
+function useStationWatch(data) {
+  const seen = useRef({})
+  if (!data) return []
+  const wallNow = Date.now()
+  const limitS = data.station_offline_after_s
+  return data.stations.map((s) => {
+    const prev = seen.current[s.id]
+    if (!prev || prev.lastSeenT !== s.last_seen_t) seen.current[s.id] = { lastSeenT: s.last_seen_t, since: wallNow }
+    if (s.last_seen_t == null) return { ...s, down: false, silentS: null }
+    const wallSilentS = (wallNow - seen.current[s.id].since) / 1000
+    const flowSilentS = data.now_t - s.last_seen_t
+    const down = s.online === false || wallSilentS > limitS
+    return { ...s, down, silentS: Math.max(wallSilentS, flowSilentS) }
+  })
+}
+
+function StationsDownBanner({ stations }) {
+  const down = stations.filter((s) => s.down)
+  if (!down.length) return null
+  return (
+    <div role="alert" className="flex items-start gap-3 rounded-2xl border-2 border-coral bg-coral/10 p-4">
+      <RadioTower className="mt-0.5 h-5 w-5 shrink-0 text-coral" />
+      <div className="space-y-1">
+        {down.map((s) => (
+          <div key={s.id} className="font-extrabold">
+            Station {s.id} · {s.name} HS
+            <span className="ml-2 font-normal text-muted-foreground">plus aucun signal depuis {formatDuration(s.silentS)}</span>
+          </div>
+        ))}
+        <div className="text-sm text-muted-foreground">Vérifier l'alimentation et la connexion du boîtier sur place.</div>
+      </div>
+    </div>
+  )
+}
+
 function Stations({ stations }) {
   return (
     <Card>
       <CardHeader><CardTitle>Stations</CardTitle></CardHeader>
       <CardContent className="space-y-2">
         {stations.map((s) => (
-          <div key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+          <div key={s.id} className={cn('flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm',
+            s.down ? 'bg-coral/10 ring-1 ring-coral' : 'bg-muted')}>
             <span><span className="font-extrabold">{s.id}</span> · {s.name}</span>
             <span className={cn('flex items-center gap-1.5 text-xs font-bold',
-              s.online ? 'text-ocean-700' : s.online === false ? 'text-coral' : 'text-muted-foreground')}>
-              <span className={cn('h-2 w-2 rounded-full', s.online ? 'bg-ocean' : s.online === false ? 'bg-coral' : 'bg-muted-foreground/40')} />
-              {s.online ? 'en ligne' : s.online === false ? 'hors ligne' : 'jamais vue'}
+              s.down ? 'text-coral' : s.online ? 'text-ocean-700' : 'text-muted-foreground')}>
+              <span className={cn('h-2 w-2 rounded-full', s.down ? 'animate-pulse bg-coral' : s.online ? 'bg-ocean' : 'bg-muted-foreground/40')} />
+              {s.down ? `HS · ${formatDuration(s.silentS)}` : s.online ? 'en ligne' : 'jamais vue'}
             </span>
           </div>
         ))}
@@ -185,7 +225,8 @@ function Boards({ boards, role, reload }) {
         <ErrorNote error={error} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {boards.map((b) => (
-            <div key={b.id} className="rounded-2xl border p-4 transition hover:border-ocean/40">
+            <div key={b.id} className={cn('rounded-2xl border border-l-4 p-4 transition hover:shadow-soft',
+              STATUS_COLORS[b.status]?.edge)}>
               <div className="flex items-center justify-between gap-2">
                 <Link to={`/p/${b.id}`} className="font-mono font-extrabold hover:underline">{b.id}</Link>
                 <StatusBadge status={b.status} label={b.status_label} />

@@ -175,10 +175,13 @@ class ChainHistory:
             cache = Path(data_dir) / ("chain_logs_%s.json" % c["address"][2:10].lower())
             state = {"scanned_to": int(c.get("block") or 0) - 1, "events": [], "sponsorships": [],
                      "corrections": {}}
+            first_block = state["scanned_to"]
             try:
                 state.update(json.loads(cache.read_text(encoding="utf-8")))
             except (OSError, ValueError):
                 pass
+            # nothing to read before the deployment block, even if an older cache started lower
+            state["scanned_to"] = max(state["scanned_to"], first_block)
             self.readers.append({"address": c["address"], "version": c["version"], "contract": contract,
                                  "topics": topics, "cache": cache, "state": state})
         self.latest = 0

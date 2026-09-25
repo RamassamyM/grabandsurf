@@ -133,7 +133,7 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertEqual(receipt["deposit_status"], "pending_check")  # freed once the board is checked
         inbox = c.get("/api/sms", params={"phone": "+33622222222"}).json()
         self.assertIn("korko-01 rendue, 12 min", inbox[0]["text"])
-        # the receipt text links to the return photo, and the deposit waits for it
+        # the receipt text links to the optional return photos
         self.assertIn("/s/A?tab=receipt", inbox[0]["text"])
         self.assertFalse(done["photo_taken"])
         # the sponsor is credited after the guest's first finished rental
@@ -174,7 +174,7 @@ class DemoScenarioTest(unittest.TestCase):
         # the photo stays private: only its fingerprint is public, anchored once
         self.assertEqual(p["history"][0]["details"]["photo_sha256"], photo["sha256"])
         self.assertNotIn("path", str(p))
-        self.assertEqual(p["ambassador"]["name"], "Maïa")
+        self.assertEqual(p["ambassador"]["name"], "Clément Roseyro")
         self.assertEqual(p["chain"]["label"], "Simulation")
 
         # 2:05 operator dashboard: theft alert and 3 missions in one sentence each
@@ -274,6 +274,20 @@ class DemoScenarioTest(unittest.TestCase):
         f = self.client.get("/api/fleet").json()
         self.assertFalse(any(a["kind"] == "station_offline" for a in f["alerts"]))
 
+    def test_restarted_flow_moves_the_clock_back(self):
+        c, d = self.client, self.demo
+        d.event(14755.5, "TIC")
+        d.event(1700, "TIC")  # the simulator restarted: its t starts again from a small value
+        h = d.sign_up("+33611112222")
+        rid = c.post("/api/rentals", json={"station": "A"}, headers=h).json()["id"]
+        d.event(1773.5, "DEPART", "korko-01")
+        live = c.get("/api/me", headers=h).json()["current_rental"]
+        self.assertEqual((live["id"], live["status"]), (rid, "active"))
+        self.assertLess(live["live"]["charged_cents"], 3000)
+        self.assertFalse(any(a["kind"] == "not_returned" for a in c.get("/api/fleet").json()["alerts"]))
+        d.event(1792.75, "RETOUR", "korko-01")
+        self.assertEqual(c.get("/api/rentals/%d" % rid, headers=h).json()["receipt"]["charged_cents"], 20)
+
     def test_real_station_epoch_time(self):
         self.demo.event(1725873012.4, "TIC")
         f = self.client.get("/api/fleet").json()
@@ -330,33 +344,26 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertEqual({b["id"]: b["status"] for b in c.get("/api/fleet").json()["boards"]}["korko-01"], "at_rack")
         self.assertEqual(c.post("/api/rentals/%d/withhold" % rid, json={"zone": "nose"}).status_code, 400)
 
-    def _photo(self, headers, rental_id, board):
-        self.demo.return_photos(headers, rental_id, board)
-
-    def test_deposit_waits_for_the_return_photo(self):
+    def test_return_photos_are_optional(self):
         c, d = self.client, self.demo
         deposit = lambda h, rid: c.get("/api/rentals/%d" % rid, headers=h).json()["receipt"]["deposit_status"]
-        # no photo: neither the next rental nor the 8 h timer frees the deposit
+        # no photo: the next rental still frees the deposit
         h1, r1 = self._returned_rental("+33611110002", "korko-01", t0=10, minutes=5)
+        pending = c.get("/api/inspections").json()["pending"]
+        self.assertTrue([s for s in pending if s["id"] == r1][0]["photo_missing"])
         h2 = d.sign_up("+33611110003")
         c.post("/api/rentals", json={"station": "A"}, headers=h2)
         d.event(1000, "DEPART", "korko-01")
-        self.assertEqual(deposit(h1, r1), "pending_check")
-        d.event(10 + 300 + 28800, "TIC")
-        self.assertEqual(deposit(h1, r1), "pending_check")
-        pending = c.get("/api/inspections").json()["pending"]
-        self.assertTrue([s for s in pending if s["id"] == r1][0]["photo_missing"])
-        # the photo of the right board arrives: the timer frees it
-        self._photo(h1, r1, "korko-01")
-        d.event(10 + 300 + 28800 + 10, "TIC")
         self.assertEqual(deposit(h1, r1), "released")
-        # with a photo, the next rental frees it
+        # no photo: the 8 h timer frees it too, and no reward is given
         h3, r3 = self._returned_rental("+33611110004", "korko-02", t0=40000, minutes=5)
-        self._photo(h3, r3, "korko-02")
-        h4 = d.sign_up("+33611110005")
-        c.post("/api/rentals", json={"station": "A"}, headers=h4)
-        d.event(41000, "DEPART", "korko-02")
+        d.event(40000 + 300 + 28800, "TIC")
         self.assertEqual(deposit(h3, r3), "released")
+        self.assertEqual(c.get("/api/me", headers=h3).json()["wallet_cents"], 0)
+        # the photos only earn the reward
+        h5, r5 = self._returned_rental("+33611110006", "korko-02", t0=80000, minutes=5)
+        d.return_photos(h5, r5, "korko-02")
+        self.assertEqual(c.get("/api/me", headers=h5).json()["wallet_cents"], 100)
 
     def test_owner_repair_fees_and_qr_codes(self):
         c = self.client
