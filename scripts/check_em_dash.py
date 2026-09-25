@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PLACES = ["backend/app", "backend/chain/ambassadors.json", "frontend/src", "frontend/index.html",
+PLACES = ["backend/app", "backend/chain/ambassadors.json", "frontend/src", "frontend/index.html", "site/src", "site/index.html",
           "station", "config.json", "docs", "README.md"]
 SKIP = {"docs/ARCHIVES"}
 EM_DASH = "—"
