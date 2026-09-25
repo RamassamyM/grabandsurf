@@ -16,8 +16,11 @@ from .domain import fleet, pricing, wallet
 from .domain.fleet import STATUS_LABELS, format_duration
 from .domain.packs import minutes_left
 from .domain.pricing import format_eur
-from .models import (Alert, Board, CardHold, ChainTx, Customer, PackCode, Photo, Rental, Station,
+from .models import (Alert, Board, CardHold, ChainTx, Customer, DamageReport, Inspection, PackCode, Photo,
+                     Rental, Station,
                      StationEvent, WalletEntry)
+from .i18n import t as tr
+from .i18n import zone_name
 from .services import Services
 
 
@@ -65,6 +68,13 @@ def phone_of(db: Session, customer_id: int) -> str:
     return c.phone if c else ""
 
 
+def sms_to(db: Session, services: Services, customer_id: int, key: str, t: float, **values: object) -> None:
+    """SMS in the customer's language."""
+    c = db.get(Customer, customer_id)
+    if c:
+        services.sms.send(db, c.phone, tr(key, c.lang, **values), t)
+
+
 def board_dict(b: Board) -> dict[str, Any]:
     return {"id": b.id, "token_id": b.token_id, "home_station": b.home_station,
             "current_station": b.current_station, "status": b.status,
@@ -108,7 +118,9 @@ def rental_view(db: Session, rental: Rental, config: dict[str, Any], now_t: floa
             "pack_minutes": rental.pack_minutes, "gross_cents": rental.gross_cents,
             "price_cents": rental.price_cents, "wallet_used_cents": rental.wallet_used_cents,
             "charged_cents": rental.charged_cents,
-            "deposit_released": rental.status == "returned",
+            "deposit_status": rental.deposit_status,
+            "deposit_released": rental.deposit_status == "released",
+            "deposit_due_t": rental.deposit_due_t,
         }
         view["photo_credited"] = db.scalar(select(Photo.id).where(
             Photo.rental_id == rental.id, Photo.rewarded.is_(True))) is not None
@@ -117,7 +129,7 @@ def rental_view(db: Session, rental: Rental, config: dict[str, Any], now_t: floa
 
 def close_rental(db: Session, services: Services, config: dict[str, Any], rental: Rental,
                  station: str, t: float, return_mode: str) -> None:
-    """Bill at the flow time of the return, capture the price, release the rest of the hold."""
+    """Bill at the flow time of the return and capture the price; the rest of the hold waits for the check."""
     code = db.get(PackCode, rental.pack_code_id) if rental.pack_code_id else None
     left = minutes_left(code.minutes_quota, code.minutes_used) if code else 0
     q = pricing.quote(t - (rental.start_t or t), left, wallet_balance(db, rental.customer_id), config)
@@ -133,20 +145,57 @@ def close_rental(db: Session, services: Services, config: dict[str, Any], rental
     hold = db.scalar(select(CardHold).where(CardHold.rental_id == rental.id))
     if hold:
         services.payment.capture("hold_%d" % hold.id, q["charged_cents"])
-        services.payment.release("hold_%d" % hold.id)
         hold.captured_cents = q["charged_cents"]
-        hold.status = "captured" if q["charged_cents"] else "released"
+    rental.deposit_status = "pending_check"
+    rental.deposit_due_t = t + config["timers"]["deposit_release_after_s"]
 
-    phone = phone_of(db, rental.customer_id)
-    parts = ["Merci ! %s rendue, %s, %s." % (rental.board_id, format_duration(t - (rental.start_t or t)),
-                                            format_eur(q["charged_cents"]))]
+    customer = db.get(Customer, rental.customer_id)
+    lang = customer.lang if customer else "fr"
+    parts = [tr("sms_receipt", lang, board=rental.board_id, duration=format_duration(t - (rental.start_t or t)),
+                amount=format_eur(q["charged_cents"]))]
     if q["pack_minutes"]:
-        parts.append("%d min offertes par ton pack." % q["pack_minutes"])
+        parts.append(tr("sms_receipt_pack", lang, minutes=q["pack_minutes"]))
     if q["wallet_used_cents"]:
-        parts.append("Cagnotte utilisée : %s." % format_eur(q["wallet_used_cents"]))
-    parts.append("Caution libérée. Prends ta planche en photo : 1 € sur ta prochaine session.")
-    services.sms.send(db, phone, " ".join(parts), t)
+        parts.append(tr("sms_receipt_wallet", lang, amount=format_eur(q["wallet_used_cents"])))
+    parts.append(tr("sms_receipt_end", lang))
+    if customer:
+        services.sms.send(db, customer.phone, " ".join(parts), t)
     reward_sponsor(db, services, config, rental.customer_id, t)
+
+
+def open_damage_reports(db: Session, rental: Rental) -> bool:
+    return db.scalar(select(func.count(DamageReport.id)).where(
+        DamageReport.rental_id == rental.id, DamageReport.status == "to_review")) > 0
+
+
+def release_deposit(db: Session, services: Services, rental: Rental, role: str, t: float) -> None:
+    """State checked: free what is left of the hold."""
+    hold = db.scalar(select(CardHold).where(CardHold.rental_id == rental.id))
+    if hold and hold.status == "authorized":
+        services.payment.release("hold_%d" % hold.id)
+        hold.status = "captured" if hold.captured_cents else "released"
+    rental.deposit_status, rental.checked_role = "released", role
+    db.add(Inspection(board_id=rental.board_id or "", kind="deposit_released", role=role, t=t))
+    sms_to(db, services, rental.customer_id, "sms_deposit_released", t, board=rental.board_id)
+
+
+def withhold_repair(db: Session, services: Services, rental: Rental, amount: int, zone: str, role: str,
+                    t: float) -> int:
+    """Repair fee taken from the hold (never above what is left of it), then the rest is freed."""
+    hold = db.scalar(select(CardHold).where(CardHold.rental_id == rental.id))
+    if hold is None or hold.status != "authorized":
+        return 0
+    amount = max(0, min(amount, hold.amount_cents - hold.captured_cents))
+    services.payment.capture("hold_%d" % hold.id, amount)
+    services.payment.release("hold_%d" % hold.id)
+    hold.captured_cents += amount
+    hold.status = "captured" if hold.captured_cents else "released"
+    rental.deposit_status, rental.checked_role = "charged", role
+    db.add(Inspection(board_id=rental.board_id or "", kind="repair_withheld", role=role, t=t))
+    customer = db.get(Customer, rental.customer_id)
+    sms_to(db, services, rental.customer_id, "sms_repair_fee", t, board=rental.board_id,
+           zone=zone_name(zone, customer.lang if customer else "fr"), amount=format_eur(amount))
+    return amount
 
 
 def reward_sponsor(db: Session, services: Services, config: dict[str, Any], customer_id: int,
@@ -163,8 +212,7 @@ def reward_sponsor(db: Session, services: Services, config: dict[str, Any], cust
     if cents:
         guest.sponsor_rewarded = True
         credit(db, guest.referred_by_id, cents, "referral_sponsor", t)
-        services.sms.send(db, phone_of(db, guest.referred_by_id),
-                          "Ton filleul a surfé : %s ajoutés à ta cagnotte Grab&Surf." % format_eur(cents), t)
+        sms_to(db, services, guest.referred_by_id, "sms_sponsor", t, amount=format_eur(cents))
 
 
 # ------------------------------------------------------------------ station events
@@ -227,9 +275,12 @@ def _on_departure(db: Session, services: Services, board: Board, ev: fleet.Stati
         return
     armed.status, armed.board_id, armed.start_t = "active", board.id, ev.t
     board.status = "at_sea"
-    services.sms.send(db, phone_of(db, armed.customer_id),
-                      "C'est parti avec %s ! Le compteur tourne. Raccroche-la au rack en sortant de l'eau." % board.id,
-                      ev.t)
+    # next rental without a damage report: the previous renter's deposit is freed
+    for previous in db.scalars(select(Rental).where(Rental.board_id == board.id, Rental.id != armed.id,
+                                                    Rental.deposit_status == "pending_check")):
+        if not open_damage_reports(db, previous):
+            release_deposit(db, services, previous, "next_rental", ev.t)
+    sms_to(db, services, armed.customer_id, "sms_departure", ev.t, board=board.id)
     record_chain(db, board.id, "DEPART", ev.station, ev.t, armed.id)
 
 
@@ -250,9 +301,7 @@ def run_timers(db: Session, services: Services, config: dict[str, Any], now: flo
     for r in db.scalars(select(Rental).where(Rental.status == "armed")):
         if now - r.armed_t >= config["timers"]["armed_valid_s"]:
             r.status = "cancelled"
-            services.sms.send(db, phone_of(db, r.customer_id),
-                              "Location annulée : aucune planche n'est partie. Rescanne le QR du rack pour recommencer.",
-                              now)
+            sms_to(db, services, r.customer_id, "sms_armed_cancelled", now)
     for r in db.scalars(select(Rental).where(Rental.status == "active")):
         if pricing.not_returned(r.start_t, now, config):
             r.status = "not_returned"
@@ -260,15 +309,14 @@ def run_timers(db: Session, services: Services, config: dict[str, Any], now: flo
             board.status, board.status_t = "not_returned", now
             raise_alert(db, "not_returned", "%s non rendue après %s : vérifier le rack avant toute perte."
                         % (r.board_id, format_duration(now - r.start_t)), now, r.board_id, r.start_station)
-            services.sms.send(db, phone_of(db, r.customer_id),
-                              "%s n'est pas encore revenue. Raccroche-la ou appelle l'exploitant. "
-                              "Ta caution n'est prélevée qu'après vérification." % r.board_id, now)
+            sms_to(db, services, r.customer_id, "sms_not_returned", now, board=r.board_id)
         elif pricing.reminder_due(r.start_t, now, r.reminder_sent, config):
             r.reminder_sent = True
-            services.sms.send(db, phone_of(db, r.customer_id),
-                              "Ta session tourne depuis %s. Raccroche %s en sortant. Au-delà, forfait journée de %s."
-                              % (format_duration(now - r.start_t), r.board_id,
-                                 format_eur(config["pricing"]["day_pass_cents"])), now)
+            sms_to(db, services, r.customer_id, "sms_reminder", now, duration=format_duration(now - r.start_t),
+                   board=r.board_id, amount=format_eur(config["pricing"]["day_pass_cents"]))
+    for r in db.scalars(select(Rental).where(Rental.deposit_status == "pending_check")):
+        if r.deposit_due_t is not None and now >= r.deposit_due_t and not open_damage_reports(db, r):
+            release_deposit(db, services, r, "auto_8h", now)
     for s in db.scalars(select(Station)):
         if fleet.station_online(s.last_seen_t, now, config) is False and not s.offline_alerted:
             s.offline_alerted = True

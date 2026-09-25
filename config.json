@@ -10,7 +10,8 @@
     "not_returned_after_s": 1800,
     "station_offline_after_s": 60,
     "otp_valid_s": 600,
-    "armed_valid_s": 300
+    "armed_valid_s": 300,
+    "deposit_release_after_s": 28800
   },
   "rewards": {
     "return_photo_cents": 100,
@@ -51,17 +52,47 @@
   "packs_rules": {
     "volume_discount_percent": 20
   },
-  "repair_fees_cents": {
-    "fin": 3000,
-    "nose": 4000,
-    "rail": 3000,
-    "shock": 5000,
-    "other": 2000
-  },
   "demo": {
     "customer_phone": "+33600000001",
     "pack_code": "MAIF-SURF",
     "extra_pack_codes": 3,
     "operator_phone": "05 59 00 00 00"
+  },
+  "repairs": {
+    "zones": {
+      "nose": {
+        "label": "Nose (avant)",
+        "fee_cents": 4000
+      },
+      "tail": {
+        "label": "Tail (arrière)",
+        "fee_cents": 3000
+      },
+      "rail": {
+        "label": "Rail (bord)",
+        "fee_cents": 3000
+      },
+      "fin": {
+        "label": "Aileron",
+        "fee_cents": 3000
+      },
+      "deck": {
+        "label": "Pont",
+        "fee_cents": 2500
+      },
+      "other": {
+        "label": "Autre",
+        "fee_cents": 2000
+      }
+    },
+    "severity_percent": {
+      "minor": 50,
+      "moderate": 100,
+      "severe": 150
+    }
+  },
+  "photo_ai": {
+    "model": "claude-opus-5",
+    "max_tokens": 16000
   }
 }

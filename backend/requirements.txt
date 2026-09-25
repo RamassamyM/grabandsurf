@@ -4,3 +4,5 @@ sqlalchemy>=2.0
 httpx>=0.27
 # blockchain (optional: without it the chain runs in simulation mode)
 web3>=7,<9
+# photo diagnosis with Claude vision (optional: without ANTHROPIC_API_KEY the diagnosis is simulated)
+anthropic>=1.8,<2

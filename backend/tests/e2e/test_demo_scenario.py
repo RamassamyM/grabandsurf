@@ -20,7 +20,7 @@ EM_DASH = "—"
 def make_client(tmp: Path, **overrides) -> TestClient:
     values = dict(database_url="sqlite:///%s" % (tmp / "test.db"), data_dir=tmp, chain_mode="fake",
                   alarm_sound=False, frontend_dist=tmp / "no-dist", operator_pin="", demo_mode=True,
-                  secret_key="test-secret")
+                  secret_key="test-secret", env={"PHOTO_AI": "fake"})
     values.update(overrides)
     return TestClient(create_app(load_settings(**values)))
 
@@ -118,7 +118,7 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertEqual(receipt["pack_minutes"], 12)
         self.assertEqual(receipt["gross_cents"], 240)
         self.assertEqual(receipt["charged_cents"], 0)
-        self.assertTrue(receipt["deposit_released"])
+        self.assertEqual(receipt["deposit_status"], "pending_check")  # freed once the board is checked
         inbox = c.get("/api/sms", params={"phone": "+33622222222"}).json()
         self.assertIn("korko-01 rendue, 12 min", inbox[0]["text"])
         # the sponsor is credited after the guest's first finished rental
@@ -157,6 +157,15 @@ class DemoScenarioTest(unittest.TestCase):
         self.assertIn("korko-02", f["missions"][0])
         self.assertTrue(all(tx["status"] == "sent" for tx in f["chain"]["txs"]))
         self.assertTrue(any(s["id"] == "B" and s["online"] is None for s in f["stations"]))
+
+        # inspection: the operator checks the returned board and frees the deposit
+        pending = c.get("/api/inspections").json()["pending"]
+        self.assertEqual([p["board_id"] for p in pending], ["korko-01"])
+        self.assertEqual(pending[0]["photos"][0]["suggestion"]["board_action"], "keep")
+        c.post("/api/rentals/%d/release-deposit" % rental["id"], json={"role": "tournee"})
+        done = c.get("/api/rentals/%d" % rental["id"], headers=tourist).json()
+        self.assertTrue(done["receipt"]["deposit_released"])
+        self.assertIn("caution est libérée", c.get("/api/sms", params={"phone": "+33622222222"}).json()[0]["text"])
 
         # 2:20 MAIF dashboard: aggregated, never a name or a phone
         m = c.get("/api/partners/maif/dashboard").json()
@@ -250,6 +259,90 @@ class DemoScenarioTest(unittest.TestCase):
         bad = c.post("/api/otp/verify", json={"phone": "+33699999999", "code": code, "referral_code": "NOPE-1234"})
         self.assertEqual(bad.status_code, 400)
         self.assertIn("MAIF-SURF", bad.json()["detail"])
+
+    def _returned_rental(self, phone, board="korko-01", t0=10, minutes=12):
+        c, d = self.client, self.demo
+        d.event(t0 - 5, "TIC")
+        h = d.sign_up(phone)
+        rid = c.post("/api/rentals", json={"station": "A"}, headers=h).json()["id"]
+        d.event(t0, "DEPART", board)
+        d.event(t0 + minutes * 60, "RETOUR", board)
+        return h, rid
+
+    def test_photo_damage_suggestion_then_fee_withheld(self):
+        c = self.client
+        h, rid = self._returned_rental("+33611110000")
+        img = base64.b64encode(b"fake-jpeg").decode()
+        out = c.post("/api/photos", json={"rental_id": rid, "board_qr": "korko-01", "image_base64": img,
+                                          "damage_zone": "fin"}, headers=h).json()
+        self.assertTrue(out["damage_detected"])
+        photos = c.get("/api/photos").json()
+        self.assertEqual(photos[0]["suggestion"]["actions"][0]["fee_cents"], 3000)
+        self.assertEqual(photos[0]["suggestion"]["board_action"], "workshop")
+        self.assertEqual(c.get("/api/photos/%d/image" % photos[0]["id"]).status_code, 200)
+        report = c.get("/api/fleet").json()["damage_reports"][0]
+        self.assertEqual((report["zone"], report["suggested_fee_cents"]), ("fin", 3000))
+        # the deposit cannot be freed while a damage waits for a decision
+        self.assertEqual(c.post("/api/rentals/%d/release-deposit" % rid, json={"role": "exploitant"}).status_code, 400)
+        rev = c.post("/api/damage-reports/%d/review" % report["id"],
+                     json={"decision": "confirm", "role": "exploitant", "fee_cents": 2500}).json()
+        self.assertEqual((rev["withheld_cents"], rev["board"]["status"]), (2500, "workshop"))
+        view = c.get("/api/rentals/%d" % rid, headers=h).json()
+        self.assertEqual(view["receipt"]["deposit_status"], "charged")
+        self.assertEqual(c.get("/api/fleet").json()["revenue_cents"], 240 + 2500)
+        self.assertIn("(aileron) après vérification : 25,00 €", c.get("/api/sms", params={"phone": "+33611110000"}).json()[0]["text"])
+
+    def test_inspection_withhold_without_photo(self):
+        c = self.client
+        h, rid = self._returned_rental("+33611110001")
+        s = c.post("/api/rentals/%d/withhold" % rid,
+                   json={"role": "tournee", "zone": "nose", "severity": "minor"}).json()
+        self.assertEqual((s["deposit_status"], s["damage_reports"][0]["fee_cents"]), ("charged", 2000))
+        self.assertEqual({b["id"]: b["status"] for b in c.get("/api/fleet").json()["boards"]}["korko-01"], "at_rack")
+        self.assertEqual(c.post("/api/rentals/%d/withhold" % rid, json={"zone": "nose"}).status_code, 400)
+
+    def test_deposit_freed_by_next_rental_or_after_8h(self):
+        c, d = self.client, self.demo
+        h1, r1 = self._returned_rental("+33611110002", "korko-01", t0=10, minutes=5)
+        h2 = d.sign_up("+33611110003")
+        c.post("/api/rentals", json={"station": "A"}, headers=h2)
+        d.event(1000, "DEPART", "korko-01")
+        self.assertEqual(c.get("/api/rentals/%d" % r1, headers=h1).json()["receipt"]["deposit_status"], "released")
+        h3, r3 = self._returned_rental("+33611110004", "korko-02", t0=2000, minutes=5)
+        d.event(2000 + 300 + 28800, "TIC")
+        self.assertEqual(c.get("/api/rentals/%d" % r3, headers=h3).json()["receipt"]["deposit_status"], "released")
+
+    def test_owner_repair_fees_and_qr_codes(self):
+        c = self.client
+        grid = c.get("/api/repair-fees").json()
+        self.assertEqual({z["zone"] for z in grid["zones"]}, {"nose", "tail", "rail", "fin", "deck", "other"})
+        rows = [dict(z, fee_cents=5000) if z["zone"] == "fin" else z for z in grid["zones"]]
+        self.assertEqual({z["zone"]: z["fee_cents"] for z in c.put("/api/repair-fees", json=rows).json()["zones"]}["fin"], 5000)
+        self.assertEqual(c.put("/api/repair-fees", json=[r for r in rows if r["zone"] != "other"]).status_code, 400)
+        c.post("/api/fleet/reset")  # the owner's grid survives a demo reset
+        self.assertEqual({z["zone"]: z["fee_cents"] for z in c.get("/api/repair-fees").json()["zones"]}["fin"], 5000)
+        qr = c.get("/api/qr-codes").json()
+        self.assertEqual(qr["racks"][0]["path"], "/s/A")
+        self.assertEqual(len(qr["boards"]), 6)
+
+    def test_customer_language_for_errors_and_sms(self):
+        c = self.client
+        en = {"X-Lang": "en"}
+        self.assertIn("Invalid phone", c.post("/api/otp", json={"phone": "abcdefgh"}, headers=en).json()["detail"])
+        self.assertIn("Solicitud", c.post("/api/otp", json={}, headers={"X-Lang": "es"}).json()["detail"])
+        code = c.post("/api/otp", json={"phone": "+34600000000"}, headers={"X-Lang": "es"}).json()["demo_code"]
+        tok = c.post("/api/otp/verify", json={"phone": "+34600000000", "code": code},
+                     headers={"X-Lang": "es"}).json()["token"]
+        es = {"Authorization": "Bearer " + tok, "X-Lang": "es"}
+        c.post("/api/card-holds", json={"card_number": "4242424242424242"}, headers=es)
+        self.assertEqual(c.post("/api/rentals", json={"station": "Z"}, headers=es).json()["detail"],
+                         "Estación desconocida.")
+        self.demo.event(1, "TIC")
+        c.post("/api/rentals", json={"station": "A"}, headers=es)
+        self.demo.event(5, "DEPART", "korko-01")
+        sms = c.get("/api/sms", params={"phone": "+34600000000"}).json()
+        self.assertTrue(sms[0]["text"].startswith("¡Adelante con korko-01!"))
+        self.assertTrue(sms[-1]["text"].startswith("Grab&Surf: tu código"))
 
     def test_errors_are_clear_not_500(self):
         c = self.client

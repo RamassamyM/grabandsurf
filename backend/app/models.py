@@ -51,6 +51,7 @@ class Customer(Base):
     sponsor_rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
     card_hold_status: Mapped[str] = mapped_column(String(16), default="none")  # none, authorized
     card_last4: Mapped[str] = mapped_column(String(4), default="")
+    lang: Mapped[str] = mapped_column(String(2), default="fr")  # fr, en, es: SMS language
     created_t: Mapped[float] = mapped_column(Float, default=0.0)
 
 
@@ -107,6 +108,10 @@ class Rental(Base):
     wallet_used_cents: Mapped[int] = mapped_column(Integer, default=0)
     charged_cents: Mapped[int] = mapped_column(Integer, default=0)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    # held (during the rental), pending_check (returned, state to validate), released, charged, bought
+    deposit_status: Mapped[str] = mapped_column(String(16), default="held")
+    deposit_due_t: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    checked_role: Mapped[str] = mapped_column(String(24), default="")  # role only, never a name
 
 
 class CardHold(Base):
@@ -150,11 +155,25 @@ class DamageReport(Base):
     board_id: Mapped[str] = mapped_column(ForeignKey("boards.id"))
     rental_id: Mapped[Optional[int]] = mapped_column(ForeignKey("rentals.id"), nullable=True)
     zone: Mapped[str] = mapped_column(String(24))
+    severity: Mapped[str] = mapped_column(String(16), default="moderate")  # minor, moderate, severe
+    description: Mapped[str] = mapped_column(String(255), default="")
+    source: Mapped[str] = mapped_column(String(16), default="customer")  # customer, photo_ai
     photo_id: Mapped[Optional[int]] = mapped_column(ForeignKey("photos.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="to_review")  # to_review, confirmed, rejected
+    suggested_fee_cents: Mapped[int] = mapped_column(Integer, default=0)
     fee_cents: Mapped[int] = mapped_column(Integer, default=0)
+    charged: Mapped[bool] = mapped_column(Boolean, default=False)
     reviewer_role: Mapped[str] = mapped_column(String(24), default="")  # role only, never a name
     t: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class RepairFee(Base):
+    """Repair price grid, editable by the owner (seeded from config.json)."""
+
+    __tablename__ = "repair_fees"
+    zone: Mapped[str] = mapped_column(String(24), primary_key=True)
+    label: Mapped[str] = mapped_column(String(48))
+    fee_cents: Mapped[int] = mapped_column(Integer)
 
 
 class StationEvent(Base):

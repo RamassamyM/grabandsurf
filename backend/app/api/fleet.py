@@ -15,7 +15,7 @@ from ..models import Alert, Board, CardHold, ChainTx, DamageReport, Inspection, 
 from ..schemas import RoleRequest
 from ..services import Services
 from ..settings import Settings
-from ..workflows import board_dict, clock, phone_of, record_chain, resolve_alerts
+from ..workflows import board_dict, clock, phone_of, record_chain, resolve_alerts, sms_to
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_operator)])
 
@@ -51,8 +51,9 @@ def fleet_view(db: Session = Depends(get_db), services: Services = Depends(get_s
     alerts = [{"id": a.id, "kind": a.kind, "board_id": a.board_id, "station": a.station,
                "message": a.message, "t": a.t}
               for a in db.scalars(select(Alert).where(Alert.resolved.is_(False)).order_by(Alert.id.desc()))]
-    damages = [{"id": d.id, "board_id": d.board_id, "zone": d.zone, "status": d.status, "photo_id": d.photo_id,
-                "fee_cents": d.fee_cents}
+    damages = [{"id": d.id, "board_id": d.board_id, "zone": d.zone, "severity": d.severity, "status": d.status,
+                "photo_id": d.photo_id, "rental_id": d.rental_id, "source": d.source, "description": d.description,
+                "suggested_fee_cents": d.suggested_fee_cents, "fee_cents": d.fee_cents}
                for d in db.scalars(select(DamageReport).where(DamageReport.status == "to_review"))]
     revenue = db.scalar(select(func.coalesce(func.sum(CardHold.captured_cents), 0))) or 0
     rentals = db.scalars(select(Rental).where(Rental.status.in_(("returned", "bought")))
@@ -61,6 +62,7 @@ def fleet_view(db: Session = Depends(get_db), services: Services = Depends(get_s
     return {
         "now_t": now, "boards": boards, "stations": stations, "alerts": alerts, "damage_reports": damages,
         "missions": _missions(db, settings, now),
+        "deposits_to_check": db.scalar(select(func.count(Rental.id)).where(Rental.deposit_status == "pending_check")),
         "revenue_cents": int(revenue), "revenue_label": format_eur(int(revenue)),
         "rentals": [{"id": r.id, "board_id": r.board_id, "status": r.status,
                      "duration_s": (r.end_t or now) - (r.start_t or now), "charged_cents": r.charged_cents,
@@ -109,10 +111,9 @@ def confirm_loss(board_id: str, body: RoleRequest, db: Session = Depends(get_db)
             services.payment.capture("hold_%d" % hold.id, amount)
             hold.captured_cents, hold.status = amount, "captured"
         rental.status, rental.charged_cents, rental.end_t = "bought", amount, now
+        rental.deposit_status, rental.checked_role = "bought", body.role
         board.status = "sold"
-        services.sms.send(db, phone_of(db, rental.customer_id),
-                          "%s n'est pas revenue : elle est maintenant à toi. Caution de %s prélevée. "
-                          "Réponds avec l'adresse de ton wallet pour recevoir son NFT." % (board.id, format_eur(amount)), now)
+        sms_to(db, services, rental.customer_id, "sms_bought", now, board=board.id, amount=format_eur(amount))
     else:
         board.status = "lost"
     board.status_t, board.current_station = now, None
